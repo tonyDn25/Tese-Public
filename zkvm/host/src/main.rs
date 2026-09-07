@@ -24,11 +24,11 @@ fn load_registry() -> Result<Vec<SignedKeyEntry>> {
             return Ok(reg);
         }
     }
-    anyhow::bail!("no GPS key registry found — set GPS_KEY_REGISTRY or place nginx/keys/gps-keys.json")
+    anyhow::bail!("no GPS key registry found, set GPS_KEY_REGISTRY or place nginx/keys/gps-keys.json")
 }
 
 #[derive(Parser)]
-#[command(name = "gps-host", about = "GPS — ZK Proof Host")]
+#[command(name = "gps-host", about = "GPS, ZK Proof Host")]
 struct Args {
     #[command(subcommand)]
     command: Command,
@@ -106,7 +106,7 @@ fn load_session(path: &str) -> Result<Session> {
         Err(e) => e,
     };
 
-    // Fall back to single transcript — wrap it in a session
+    // Fall back to single transcript, wrap it in a session
     let t: Transcript = serde_json::from_str(&raw)
         .with_context(|| format!(
             "File is neither a valid Session (session parse error: {}) nor a valid Transcript",
@@ -157,7 +157,7 @@ fn run_prove_multi(
         }
     }
 
-    // Build FieldRequest list — per-field session/url override via --field-session / --field-url
+    // Build FieldRequest list, per-field session/url override via --field-session / --field-url
     let field_requests: Vec<gps_core::FieldRequest> = fields.iter().zip(predicates.iter())
         .enumerate()
         .map(|(i, (field_str, pred))| {
@@ -485,7 +485,7 @@ fn regex_to_anchored(pattern: &str) -> Option<(String, usize, gps_core::Anchored
     let after = rest[brace + 1..].strip_prefix('?').unwrap_or(&rest[brace + 1..]);
     let inner = after.strip_prefix('(')?.strip_suffix(')')?;
     // content.js emits bare literals, e.g. `(Alice Smith)`. A future or alternate
-    // pattern generator may word-bound them as `(\bAlice Smith\b)` — strip a single
+    // pattern generator may word-bound them as `(\bAlice Smith\b)`: strip a single
     // leading and trailing `\b` (and only that) so the literal still lowers to
     // Anchored(Literal) instead of falling back to the expensive full-regex path.
     // The `\b` is a zero-width assertion, so the captured value is unchanged.
@@ -494,7 +494,7 @@ fn regex_to_anchored(pattern: &str) -> Option<(String, usize, gps_core::Anchored
     // Both the unsigned `[0-9][0-9.,]*` and the signed `[+-]?[0-9][0-9.,]*` token
     // (the shape content.js emits for numbers) lower to the same Anchored Number
     // extractor. `extract_anchored` matches the optional leading sign and includes
-    // it in the value, so negative quantities are preserved — this is why folding
+    // it in the value, so negative quantities are preserved, this is why folding
     // `[+-]?` in is now sound (it was previously refused because the unsigned
     // extractor would have silently dropped the sign). See [[KI-19]].
     // Date patterns lower to the anchored Date extractor rather than falling back
@@ -789,7 +789,7 @@ fn pre_extract_values(fields: Vec<gps_core::FieldRequest>) -> Vec<gps_core::Fiel
         // authoritative.)
         let session = match load_session(&f.session_path) { Ok(s) => s, Err(_) => return f };
         // KI-21: only hint from the EXACT target page. No silent "last signed page"
-        // fallback — a wrong-page hint would either mismatch the guest's in-circuit
+        // fallback, a wrong-page hint would either mismatch the guest's in-circuit
         // value (confusing "binding violated") or, worse, look plausible. If the URL
         // isn't found, leave the hint empty; the guest extraction stays authoritative.
         let target = session.pages.iter().find(|p| {
@@ -1250,8 +1250,80 @@ fn analyze_field_with_agent(request: &serde_json::Value) -> serde_json::Value {
 
 #[cfg(test)]
 mod tests {
-    use super::regex_to_anchored;
+    use super::{regex_to_anchored, handle_native_request, url_to_path};
     use gps_core::{AnchoredKind, DateFormat};
+
+    // -- The browser path (added 2026-09-07) --------------------------------
+    //
+    // Nothing in this suite exercised the path the extension actually uses, and
+    // six defects lived there undetected while 65 tests and a full read of the
+    // dissertation stayed green. The one that mattered most: the extension sent
+    // `url` as a FULL URL while the guest matches `Transcript.request.path`, so
+    // find_target_page() could never match and EVERY proof started from the
+    // browser aborted, while the identical proof from the CLI succeeded.
+    //
+    // These drive `handle_native_request` with the exact JSON shape
+    // extension/background/background.js builds, so that class of mismatch
+    // cannot come back silently. They run in dev mode: the point is the request
+    // plumbing, not the STARK, so they cost milliseconds rather than minutes.
+
+    fn repo(rel: &str) -> String {
+        // tests run with CWD = the crate dir (zkvm/host), the repo is two up
+        format!("{}/../../{}", env!("CARGO_MANIFEST_DIR"), rel)
+    }
+
+    fn browser_shaped_prove(url: &str) -> serde_json::Value {
+        std::env::set_var("RISC0_DEV_MODE", "1");
+        std::env::set_var("GPS_KEY_REGISTRY", repo("nginx/keys/gps-keys.json"));
+        handle_native_request(&serde_json::json!({
+            "_id": 1,
+            "session": repo("sessions/session_direct_172_18_0_50_4502b208.json"),
+            "url": url,
+            "dev_mode": true,
+            // exactly what background.js sends for a single field
+            "field": "regex:Account Balance.{0,300}?([+-]?[0-9][0-9.,]*)|||balance",
+            "predicate": "> 1000"
+        }))
+    }
+
+    #[test]
+    fn a_full_url_from_the_extension_still_finds_the_page() {
+        // The regression itself: this is what the browser sends.
+        let r = browser_shaped_prove("https://172.18.0.50/account");
+        assert_eq!(r["ok"], true, "browser-shaped prove failed: {}", r["error"]);
+    }
+
+    #[test]
+    fn a_bare_path_from_the_cli_behaves_identically() {
+        let r = browser_shaped_prove("/account");
+        assert_eq!(r["ok"], true, "cli-shaped prove failed: {}", r["error"]);
+    }
+
+    #[test]
+    fn the_journal_names_the_field_rather_than_echoing_the_pattern() {
+        // The extension appends |||<label>; without it parse_field_spec falls back
+        // to using the whole regex as the label, and the journal read
+        // `field_label: "Account Balance.{0,300}?([+-]?[0-9][0-9.,]*)"`.
+        let r = browser_shaped_prove("https://172.18.0.50/account");
+        let label = r["proof"]["journal"]["field_results"][0]["field_label"]
+            .as_str().unwrap_or("");
+        assert_eq!(label, "balance", "journal field_label should be the human label");
+        assert!(!label.contains("{0,300}"), "the raw pattern leaked into the label");
+    }
+
+    #[test]
+    fn an_unknown_page_is_refused_rather_than_guessed() {
+        // KI-21: the guest must abort instead of falling back to another page.
+        let r = browser_shaped_prove("https://172.18.0.50/does-not-exist");
+        assert_eq!(r["ok"], false, "a page that is not in the session must not prove");
+    }
+
+    #[test]
+    fn url_normalisation_covers_what_the_browser_can_send() {
+        assert_eq!(url_to_path("https://172.18.0.50/account"), "/account");
+        assert_eq!(url_to_path("/account"), "/account");
+        assert_eq!(url_to_path("https://172.18.0.50"), "/");
+    }
 
     // -- Date lowering (added 2026-09-05, KI-20) ----------------------------
     // Before this, every one of these fell through to Extractor::Regex and cost
@@ -1338,7 +1410,7 @@ mod tests {
 
     #[test]
     fn meta_in_literal_falls_back() {
-        // A literal carrying regex metacharacters cannot be a sound Literal — keep
+        // A literal carrying regex metacharacters cannot be a sound Literal, keep
         // the general regex path so the value is matched correctly.
         assert!(regex_to_anchored("Label.{0,50}?(a.b)").is_none());
     }

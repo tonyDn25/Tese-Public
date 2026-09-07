@@ -1,12 +1,12 @@
--- GPS Server — RFC 9421 HTTP Message Signatures (full implementation)
+-- GPS Server, RFC 9421 HTTP Message Signatures (full implementation)
 --
 -- Signed components (Section 2.2 of RFC 9421):
---   "@method"        — HTTP method (GET, POST, ...)
---   "@authority"     — Host header (e.g. 172.18.0.50)
---   "@target-uri"    — Full request URI
---   "@status"        — HTTP response status code
---   "content-digest" — SHA-256 of response body (RFC 9530)
---   "date"           — HTTP Date header
+--   "@method"       , HTTP method (GET, POST, ...)
+--   "@authority"    , Host header (e.g. 172.18.0.50)
+--   "@target-uri"   , Full request URI
+--   "@status"       , HTTP response status code
+--   "content-digest", SHA-256 of response body (RFC 9530)
+--   "date"          , HTTP Date header
 --
 -- The signature base is a canonicalized string of the above,
 -- terminated by the @signature-params line (Section 2.3).

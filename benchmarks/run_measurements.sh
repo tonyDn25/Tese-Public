@@ -94,7 +94,7 @@ for key,desc in cfgs:
         rows.append(f"| {desc} | {n} | {m:.1f} | {sd:.1f} | {lo:.1f} | {hi:.1f} |")
         detail.append(f"- **{desc}** (n={n}): "+", ".join(f"{v:.1f}" for v in vals))
     else:
-        rows.append(f"| {desc} | 0 | — | — | — | — |")
+        rows.append(f"| {desc} | 0 |, |, |, |, |")
 out=os.path.join(repo,"benchmarks","n10_measurements.md")
 with open(out,"w") as f:
     f.write("# CPU-pinned real-STARK measurements (v12 guest, image_id 71442f7b...)\n\n")

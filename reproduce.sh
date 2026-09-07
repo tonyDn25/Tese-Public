@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ============================================================================
-#  GPS — full reproduction & verification harness
+#  GPS: full reproduction & verification harness
 # ============================================================================
 #  One script an evaluator can run on a fresh machine to reproduce EVERY claim
 #  in the paper: the guest image identifier, the proofs and their metrics, the
@@ -83,7 +83,7 @@ cmd_env(){
   done
   if need docker; then
     if docker buildx version >/dev/null 2>&1; then ok "docker buildx  $(docker buildx version 2>/dev/null | head -1)"
-    else note "docker buildx MISSING — needed for the reproducible guest build (image_id == $EXP_IMAGE_ID). Install buildx, or set RISC0_SKIP_DOCKER=1 for a fast local build with an environment-specific id."; fi
+    else note "docker buildx MISSING, needed for the reproducible guest build (image_id == $EXP_IMAGE_ID). Install buildx, or set RISC0_SKIP_DOCKER=1 for a fast local build with an environment-specific id."; fi
   fi
   note "RISC Zero is pulled by cargo on first build (rzup not required for CPU proving)."
   echo; note "Repo: $REPO"; note "Key registry: $GPS_KEY_REGISTRY"
@@ -105,7 +105,7 @@ cmd_build(){
   if [ "$img" = "$EXP_IMAGE_ID" ]; then
     ok "image_id matches - the source in this tree reproduces the artifacts and the dissertation (Appendix A)."
   else
-    bad "image_id MISMATCH — source differs from the shipped artifacts."
+    bad "image_id MISMATCH, source differs from the shipped artifacts."
   fi
 }
 
@@ -247,7 +247,7 @@ cmd_proofs(){
   gen 2field    /tmp/repro_2field.json    -- --session "$SESS1" --url /account --field "$BAL" --predicate '> 1000' --field "$HOLD" --predicate '== "Alice Smith"'
   gen pdf       /tmp/repro_pdf.json       -- --session "$SESSP" --url /comprovativo.pdf --field "$NIF" --predicate '== 500 960 046'
   gen crosspage /tmp/repro_xpage.json     -- --session "$SESSM" --field "$MB1" --predicate '> 1000' --field-session "$SESSM" --field-url /account --field "$MW2" --predicate '== António Silva' --field-session "$SESSM" --field-url /mypage
-  ok "regenerated proofs in /tmp/repro_*.json — verify with: $BIN verify --proof /tmp/repro_1field.json"
+  ok "regenerated proofs in /tmp/repro_*.json, verify with: $BIN verify --proof /tmp/repro_1field.json"
 }
 
 # -- full timing campaign (Table 6.3, n=10) ---------------------------------
@@ -263,7 +263,7 @@ cmd_timing(){
 
 # -- Firefox / extension flow (manual, with instructions) -------------------
 cmd_firefox(){
-  hdr "Browser / extension proof flow (Firefox) — interactive"
+  hdr "Browser / extension proof flow (Firefox), interactive"
   note "The popup flow needs a GUI Firefox; this command brings up the backend and prints the steps."
   echo
   echo "${CB}1. Start the signing server + native host${C0}"
@@ -293,7 +293,7 @@ cmd_firefox(){
   echo
   read -rp "Bring up the server + install the host now? [y/N] " a
   if [[ "${a:-N}" =~ ^[Yy]$ ]]; then
-    need docker && bash "$REPO/launch.sh" || note "docker not available — start it and re-run launch.sh"
+    need docker && bash "$REPO/launch.sh" || note "docker not available, start it and re-run launch.sh"
     bash "$REPO/extension/install.sh" 2>/dev/null || note "install.sh needs the built binary (run ./reproduce.sh build first)"
   fi
 }
@@ -319,7 +319,7 @@ EOF
 }
 
 cmd_quick(){ cmd_env; cmd_build; cmd_verify; cmd_soundness; hdr "quick done"; }
-cmd_all(){ cmd_quick; cmd_cycles; cmd_proofs; hdr "ALL headless checks done — see ./reproduce.sh firefox for the browser flow"; }
+cmd_all(){ cmd_quick; cmd_cycles; cmd_proofs; hdr "ALL headless checks done, see ./reproduce.sh firefox for the browser flow"; }
 
 case "${1:-}" in
   env) cmd_env;; build) cmd_build;; verify) cmd_verify;; soundness) cmd_soundness;;

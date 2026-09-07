@@ -1,4 +1,4 @@
--- GPS sign_pdf.lua — RFC 9421 signing for binary/PDF responses
+-- GPS sign_pdf.lua, RFC 9421 signing for binary/PDF responses
 
 local resty_openssl_digest = require "resty.openssl.digest"
 local resty_openssl_pkey   = require "resty.openssl.pkey"
@@ -60,7 +60,7 @@ sig_base = sig_base .. '"content-digest": ' .. content_digest .. '\n'
 sig_base = sig_base .. '"date": ' .. date_str .. '\n'
 sig_base = sig_base .. '"@signature-params": ' .. sig_params_inner
 
--- Sign (pass sig_base directly — pkey:sign handles SHA-256 internally)
+-- Sign (pass sig_base directly, pkey:sign handles SHA-256 internally)
 local sig_raw, sign_err = pkey:sign(sig_base, "sha256")
 if not sig_raw then
     ngx.status = 500

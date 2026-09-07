@@ -168,7 +168,7 @@ Everything is driven by **`./reproduce.sh <command>`** (run `./reproduce.sh` wit
 
 ## 8. Using the REAL verifier
 A GPS proof is a JSON file with a `seal` (the STARK proof) and a `journal` (the public claims). "Real"
-verification means cryptographically checking the seal against the guest `image_id`, **not** merely
+verification means cryptographically checking the seal against the guest `image_id`: **not** merely
 reading the journal. Three equivalent ways:
 
 **(a) Command line, `gps-host verify`** (recommended; no daemon):
@@ -178,7 +178,7 @@ GPS_KEY_REGISTRY=$PWD/nginx/keys/gps-keys.json \
   bin/gps-host verify --proof proofs/proof_1field.json
 # → "Verifying STARK seal against GPS image_id... VALID"
 ```
-This calls `receipt.verify(GPS_GUEST_ID)`, the genuine RISC Zero STARK check.
+This calls `receipt.verify(GPS_GUEST_ID)`: the genuine RISC Zero STARK check.
 - **VALID** = the seal is a real proof produced by *exactly* the guest whose id the verifier was built with, and the journal is authentic.
 - **`gps-host verify` is image-id-specific.** It checks against the *currently compiled* guest. A proof from a different guest fails with "claim digest does not match", that is correct. To verify a proof from another build, use `risc0-verifier` with the proof's own id.
 - A **dev-mode** proof (`dev_mode:true`) is **rejected** here, dev receipts can never pass as real.
@@ -220,7 +220,7 @@ launch.sh avoids them, see the §9 note below.)
 
 **One-time on first launch:**
 1. **Accept the demo TLS cert.** The pages are served over HTTPS by a self-signed cert for
-   `172.18.0.50`, on the first visit click *Advanced → Accept the Risk and Continue*.
+   `172.18.0.50`: on the first visit click *Advanced → Accept the Risk and Continue*.
 2. **Check the host is connected.** Click the GPS toolbar icon: a **green dot** means the native
    host is connected. (`tail -f /tmp/gps-host.log` shows `wrapper invoked` when it connects.)
 
@@ -229,7 +229,7 @@ launch.sh avoids them, see the §9 note below.)
    captures the RFC 9421-signed response automatically.
 4. Open the GPS popup → **Select a value on the page**. Then **click the label first** (e.g.
    "Account Balance"), then **click the value** (e.g. `2500.00`). This builds the anchored
-   selector `anchored:"Account Balance"->number(w=300)`, the label anchors the extraction and the
+   selector `anchored:"Account Balance"->number(w=300)`: the label anchors the extraction and the
    guest re-runs it in-circuit, so the host cannot substitute a value.
 5. Enter a **predicate** and press Enter / **Generate ZK Proof**:
    - numeric: `> 1000`, `>= 500`, `== 2500.00`
@@ -293,7 +293,7 @@ cd gps   # this folder
 (`71442f7b…`) on any machine. This needs Docker with **BuildKit**. If `docker buildx version`
 fails, install the buildx plugin (e.g. `pacman -S docker-buildx`, or drop the release binary in
 `~/.docker/cli-plugins/docker-buildx`) and the build runs with `DOCKER_BUILDKIT=1`. To skip Docker
-and build locally instead, set `RISC0_SKIP_DOCKER=1`, the build still works but its `image_id`
+and build locally instead, set `RISC0_SKIP_DOCKER=1`: the build still works but its `image_id`
 is environment-specific and will **not** equal `71442f7b…` (so the shipped proofs are then verified
 with the prebuilt `bin/gps-host`, and proofs you generate are verified with your own build).
 

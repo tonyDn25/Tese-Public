@@ -38,15 +38,15 @@ make_registry() { # keyid domain leaf_pem_path out_path
 expect_reject() { # name session registry
   local out; out=$(GPS_KEY_REGISTRY="$3" "$BIN" prove --session "$2" --url /account \
       --field "$BAL" --predicate '> 1000' --output "$TMP/p.json" 2>&1)
-  if [ -f "$TMP/p.json" ]; then echo "  FAIL  $1 — produced a proof (NOT rejected)"; fail=$((fail+1));
-  else echo "  PASS  $1 — $(echo "$out" | grep -ioE "panic.*|[A-Za-z' ]*violated[A-Za-z' ]*|not signed by the GPS root|not found|mismatch|tampered|unsupported signature base" | head -1)"; pass=$((pass+1)); fi
+  if [ -f "$TMP/p.json" ]; then echo "  FAIL  $1, produced a proof (NOT rejected)"; fail=$((fail+1));
+  else echo "  PASS  $1, $(echo "$out" | grep -ioE "panic.*|[A-Za-z' ]*violated[A-Za-z' ]*|not signed by the GPS root|not found|mismatch|tampered|unsupported signature base" | head -1)"; pass=$((pass+1)); fi
   rm -f "$TMP/p.json"
 }
 expect_success() { # name session registry
   GPS_KEY_REGISTRY="$3" "$BIN" prove --session "$2" --url /account \
       --field "$BAL" --predicate '> 1000' --output "$TMP/p.json" >/dev/null 2>&1
-  if [ -f "$TMP/p.json" ]; then echo "  PASS  $1 — proof produced (control)"; pass=$((pass+1));
-  else echo "  FAIL  $1 — control did NOT produce a proof"; fail=$((fail+1)); fi
+  if [ -f "$TMP/p.json" ]; then echo "  PASS  $1, proof produced (control)"; pass=$((pass+1));
+  else echo "  FAIL  $1, control did NOT produce a proof"; fail=$((fail+1)); fi
   rm -f "$TMP/p.json"
 }
 

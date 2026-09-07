@@ -7,11 +7,11 @@ use std::collections::HashMap;
 
 risc0_zkvm::guest::entry!(main);
 
-/// Hardcoded GPS ROOT public key — the trust anchor (v2 key-distribution model).
+/// Hardcoded GPS ROOT public key, the trust anchor (v2 key-distribution model).
 /// The guest no longer pins a single origin (leaf) key. It pins this long-lived
 /// ROOT key and trusts any origin leaf key the root has signed into a registry
 /// entry (verified in-circuit below). Rotating or adding an origin's leaf key
-/// only needs a new root-signed entry — it does NOT change this image_id. Any
+/// only needs a new root-signed entry, it does NOT change this image_id. Any
 /// change to THIS key does change the image_id.
 const GPS_ROOT_PUBLIC_KEY_PEM: &str = "-----BEGIN PUBLIC KEY-----\nMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEy46i8cxKUyZp7UQl6WF+pXdQcA0K\noMnY0ChSiWdwklbp3IqKLRc8Mhsn1Hd623trlpWQ0ZG4zQ8oFkbZQz/n7A==\n-----END PUBLIC KEY-----\n";
 
@@ -151,11 +151,11 @@ fn main() {
         let leaf_pem = trusted_leaf.get(&page_keyid).expect("leaf key resolved above");
 
         if !verified_pages.contains(&page_key) {
-            // -- Verify RFC 9421 signature (expensive — only once per page) -
+            // -- Verify RFC 9421 signature (expensive, only once per page) -
             // Exactly one accepted base: the full 6-component RFC 9421 base
             // (@method @authority @target-uri @status content-digest date).
             // The legacy 2-component base and the old non-standard PDF base are
-            // rejected — accepting them let provenance fields be read from
+            // rejected, accepting them let provenance fields be read from
             // components the signature never covered (MF2, downgrade attack).
             assert!(params_str.contains("@method"),
                 "Field '{}': unsupported signature base — only the full 6-component RFC 9421 base is accepted",
@@ -384,7 +384,7 @@ fn find_target_page<'a>(session: &'a Session, target_url: &str) -> Option<&'a Tr
             p == "/" || p.is_empty()
         }) { return Some(t); }
     }
-    // No match — return None so the caller panics with a precise error
+    // No match, return None so the caller panics with a precise error
     None
 }
 

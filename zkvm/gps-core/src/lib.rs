@@ -212,7 +212,7 @@ pub fn extract_anchored(body: &str, anchor: &str, window: usize, kind: &Anchored
         AnchoredKind::Number => {
             // Match `[+-]?[0-9][0-9.,]*` at the earliest position (lazy-gap
             // semantics): scan left to right for the first index that begins a
-            // number — either a digit, or a single '+'/'-' immediately before a
+            // number, either a digit, or a single '+'/'-' immediately before a
             // digit. The sign, when present, is included in the value so that
             // negative quantities (e.g. an overdrawn balance) are preserved.
             let n = region.len();
@@ -376,7 +376,7 @@ pub fn redact_predicate<F: Fn(&[u8]) -> String>(pred: &str, salt: Option<&[u8]>,
 // The guest no longer pins a single leaf signing key. Instead it pins a long-lived
 // ROOT public key, and trusts any origin leaf key that the root has signed into a
 // registry entry. Rotating or adding an origin's leaf key only requires a new
-// root-signed entry — it does NOT change the guest image_id. This removes the
+// root-signed entry, it does NOT change the guest image_id. This removes the
 // "rotation breaks every verifier" and "one origin only" objections while keeping
 // soundness: trust still bottoms out at the pinned root.
 
@@ -395,7 +395,7 @@ pub struct KeyRegistryEntry {
 
 /// Strip a PEM to its single-line base64 DER body (drops `-----` headers and all
 /// whitespace), so canonicalisation never depends on PEM line-wrapping or a trailing
-/// newline — the host (openssl) and the guest derive identical bytes.
+/// newline, the host (openssl) and the guest derive identical bytes.
 pub fn pem_b64_body(pem: &str) -> String {
     pem.lines()
         .filter(|l| !l.starts_with("-----"))
@@ -476,7 +476,7 @@ pub struct FieldResult {
     pub field_selected:      String,
     pub predicate_statement: String,
     pub predicate_result:    bool,
-    /// Provenance — cryptographically bound to this field result
+    /// Provenance, cryptographically bound to this field result
     #[serde(default)]
     pub source_domain:     String,
     #[serde(default)]
@@ -543,7 +543,7 @@ impl ProofRequest {
     }
 }
 
-/// The proof receipt — committed to the zkVM journal.
+/// The proof receipt, committed to the zkVM journal.
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct ProofReceipt {
     // -- Identity ----------------------------------------------------------

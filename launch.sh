@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# launch.sh — Bring up the GPS demo stack from this folder.
+# launch.sh: Bring up the GPS demo stack from this folder.
 #
 #   1. Builds + starts the GPS signing server (Docker, 172.18.0.50)
 #   2. Ensures the gps-host native binary is installed
@@ -11,7 +11,7 @@
 set -euo pipefail
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-echo " GPS — starting up (from $REPO_DIR)"
+echo " GPS, starting up (from $REPO_DIR)"
 echo "-------------------------------------------"
 
 # 1. Server
@@ -30,15 +30,15 @@ sleep 3
 if curl -skI https://172.18.0.50/account 2>/dev/null | grep -qi 'x-gps-signed: true'; then
   echo "OK Server signing at https://172.18.0.50"
 else
-  echo "FAIL Server not signing — check: docker compose logs gps-server"
+  echo "FAIL Server not signing, check: docker compose logs gps-server"
   exit 1
 fi
 
-# 2. Native host — use the installed one, else the prebuilt binary shipped here.
+# 2. Native host: use the installed one, else the prebuilt binary shipped here.
 GPS_HOST="$HOME/.local/bin/gps-host"
 [ -f "$GPS_HOST" ] || GPS_HOST="$REPO_DIR/bin/gps-host"
 if [ ! -f "$GPS_HOST" ]; then
-  echo " gps-host not found — running extension/install.sh…"
+  echo " gps-host not found, running extension/install.sh…"
   "$REPO_DIR/extension/install.sh"
   GPS_HOST="$HOME/.local/bin/gps-host"
 fi
@@ -87,7 +87,7 @@ fi
 echo "OK verifier service: http://127.0.0.1:8788  (open $REPO_DIR/verifier.html)"
 
 # 4. Optionally launch Firefox with a prepared GPS profile (sideloaded extension +
-#    imported CA). Off by default — set GPS_FF_PROFILE=/path/to/profile to use it;
+#    imported CA). Off by default: set GPS_FF_PROFILE=/path/to/profile to use it;
 #    otherwise follow the manual extension-load steps printed below (§9 of GUIDE.md).
 #    GPS_NO_FIREFOX=1 also skips it.
 FF_PROFILE="${GPS_FF_PROFILE:-}"
@@ -107,7 +107,7 @@ fi
 # Use a dedicated, auto-configured profile by default (override with GPS_FF_PROFILE).
 FF_PROFILE="${FF_PROFILE:-$REPO_DIR/.gps-ff-profile}"
 if [ -n "${GPS_NO_FIREFOX:-}" ]; then
-  echo "Note: GPS_NO_FIREFOX set — not launching Firefox."
+  echo "Note: GPS_NO_FIREFOX set, not launching Firefox."
 elif [ -z "$FF_BIN" ]; then
   echo "[!]  No unsandboxed Firefox found (snap/flatpak/firejail break native messaging)."
   echo "    Install a plain Firefox or set GPS_FF_BIN=/path/to/real/firefox, then re-run."
@@ -135,7 +135,7 @@ UJS
   echo "   1. First visit: ACCEPT the demo TLS cert (Advanced → Accept the Risk) on https://172.18.0.50."
   echo "   2. The GPS popup dot turns green within ~30 s once the host connects."
   echo "      Watch it: tail -f /tmp/gps-host.log   (look for 'wrapper invoked')."
-  echo "   3. If it stays grey: the extension may be disabled — open about:addons, enable"
+  echo "   3. If it stays grey: the extension may be disabled, open about:addons, enable"
   echo "      'GPS', and reload; or load it live via about:debugging → Load Temporary Add-on →"
   echo "      $REPO_DIR/extension/manifest.json"
 fi

@@ -3,7 +3,7 @@ version: '3.8'
 services:
   # -- RETIRED (Path A′, 2026-06-12): legacy 2-component signing path ----------
   # The `nginx` service (172.18.0.10) ran nginx/lua/sign_response.lua, which signed
-  # only ("@status" "content-digest") — the MF2 legacy base. The guest now rejects
+  # only ("@status" "content-digest"), the MF2 legacy base. The guest now rejects
   # any base lacking @method (full 6-component RFC 9421 only), so this path can no
   # longer produce a verifiable proof. Unwired here; the nginx/ dir and its Lua are
   # kept on disk for history (see PRUNING_PATH_A_PRIME.md). To revive for archaeology

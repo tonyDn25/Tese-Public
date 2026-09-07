@@ -6,7 +6,7 @@ edition = "2021"
 [features]
 # Compiles the forged-value attack simulator (GPS_SIM_FORGE_VALUE). OFF by default
 # so the production binary cannot be told to inject a forged host hint. Even with it
-# on, the guest's in-circuit binding rejects the forgery — it is a negative test.
+# on, the guest's in-circuit binding rejects the forgery: it is a negative test.
 attack-sim = []
 
 [dependencies]

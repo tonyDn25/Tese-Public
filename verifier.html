@@ -286,7 +286,7 @@
     <input type="file" id="fileInput" accept=".json" style="display:none">
   </div>
 
-  <div class="or">— or paste proof JSON —</div>
+  <div class="or">, or paste proof JSON ,</div>
 
   <textarea id="proofInput" placeholder='{"image_id": "...", "seal": "...", "journal": {...}}'></textarea>
 
@@ -348,8 +348,8 @@
 </div>
 
 <script>
-// Current GPS guest image_id — update when guest is rebuilt
-// Known valid GPS guest image_ids — add new ones when guest is rebuilt
+// Current GPS guest image_id, update when guest is rebuilt
+// Known valid GPS guest image_ids, add new ones when guest is rebuilt
 const GPS_IMAGE_ID_LABELS = {
   '71442f7b757c93edf1a14b0535a68b427d80818a156a9eb4ff2c936cfbc2e65b': 'v12 (current: anchored dates, salted commitments)',
   '97f01cdf9e73615c830284fc1102f26136a572ba4ad0c419ed69e6f035342a55': 'v11 (superseded 2026-09-05; unsalted commitments)',
@@ -399,12 +399,12 @@ function esc(s) {
 }
 
 function shortHash(h) {
-  if (!h) return '—';
+  if (!h) return ',';
   return h.length > 16 ? h.slice(0, 16) + '…' : h;
 }
 
 function fmtTimestamp(ts) {
-  if (!ts) return '—';
+  if (!ts) return ',';
   const n = parseInt(ts);
   if (isNaN(n)) return esc(ts);
   return new Date(n * 1000).toLocaleString();
@@ -464,7 +464,7 @@ async function verify() {
   result.className = 'result ' + (isValid ? 'valid' : 'invalid');
   result.style.display = 'block';
   document.getElementById('devmodeBadge').innerHTML = isDevMode
-    ? '<span class="devmode-badge">[!] DEV MODE seal — a real STARK verify will reject it</span>' : '';
+    ? '<span class="devmode-badge">[!] DEV MODE seal, a real STARK verify will reject it</span>' : '';
 
   if (stark.reachable) {
     document.getElementById('resultIcon').textContent = isValid ? 'OK' : 'FAIL';
@@ -479,9 +479,9 @@ async function verify() {
     document.getElementById('resultIcon').textContent = isValid ? 'ℹ' : 'FAIL';
     document.getElementById('resultTitle').textContent = isValid
       ? 'Journal checks passed (NOT STARK-verified)'
-      : (!imageMatch ? 'Invalid — Program Mismatch' : 'Journal check failed — Predicate FALSE');
+      : (!imageMatch ? 'Invalid, Program Mismatch' : 'Journal check failed, Predicate FALSE');
     document.getElementById('resultSubtitle').textContent = isValid
-      ? 'Verify service offline — journal + image id only. Start it with `gps-host verify-serve`, or run `gps-host verify --proof <file>`.'
+      ? 'Verify service offline, journal + image id only. Start it with `gps-host verify-serve`, or run `gps-host verify --proof <file>`.'
       : 'Journal inspection failed';
   }
 
@@ -493,13 +493,13 @@ async function verify() {
     ['Session ID', `<span class="field-value mono">${esc(j.session_id)}</span>`],
     ['Proof Size', meta.proof_size_bytes
       ? (meta.proof_size_bytes / 1024).toFixed(0) + ' KB'
-      : '—'],
+      : ','],
     ['Proof Time', meta.proof_time_seconds
       ? meta.proof_time_seconds.toFixed(1) + 's'
-      : '—'],
+      : ','],
     ['Generated', meta.proof_generation_time
       ? esc(meta.proof_generation_time.slice(0, 19).replace('T', ' '))
-      : '—'],
+      : ','],
   ];
 
   document.getElementById('summaryFields').innerHTML = summaryRows.map(([label, value]) => `
@@ -521,7 +521,7 @@ async function verify() {
       return `
         <div class="proof-field-card">
           <div class="proof-field-header">
-            <div class="proof-field-name">Field ${i+1}: ${esc(fr.field_label || fr.field_selected || '—')}</div>
+            <div class="proof-field-name">Field ${i+1}: ${esc(fr.field_label || fr.field_selected || ',')}</div>
             <span class="predicate-result ${ok}">${ok ? 'TRUE' : 'FALSE'}</span>
           </div>
           <div class="fields">
@@ -533,23 +533,23 @@ async function verify() {
           <div class="provenance-grid">
             <div class="prov-item">
               <div class="prov-item-label">Source Domain</div>
-              <div class="prov-item-value">${esc(prov.source_domain || j.server_domain || '—')}</div>
+              <div class="prov-item-value">${esc(prov.source_domain || j.server_domain || ',')}</div>
             </div>
             <div class="prov-item">
               <div class="prov-item-label">Source URL</div>
-              <div class="prov-item-value url">${esc(prov.source_url || j.target_url || '—')}</div>
+              <div class="prov-item-value url">${esc(prov.source_url || j.target_url || ',')}</div>
             </div>
             <div class="prov-item">
               <div class="prov-item-label">Session ID</div>
-              <div class="prov-item-value hash">${esc(prov.source_session_id || j.session_id || '—')}</div>
+              <div class="prov-item-value hash">${esc(prov.source_session_id || j.session_id || ',')}</div>
             </div>
             <div class="prov-item">
               <div class="prov-item-label">Trust Anchor</div>
-              <div class="prov-item-value">${esc(prov.trust_anchor || j.trust_anchor || '—')}</div>
+              <div class="prov-item-value">${esc(prov.trust_anchor || j.trust_anchor || ',')}</div>
             </div>
             <div class="prov-item" style="grid-column: 1 / -1">
               <div class="prov-item-label">Body Hash (SHA-256 of signed response body)</div>
-              <div class="prov-item-value hash">${esc(prov.source_body_hash || j.body_hash || '—')}</div>
+              <div class="prov-item-value hash">${esc(prov.source_body_hash || j.body_hash || ',')}</div>
             </div>
           </div>
         </div>
@@ -561,21 +561,21 @@ async function verify() {
     cardsEl.innerHTML = `
       <div class="proof-field-card">
         <div class="proof-field-header">
-          <div class="proof-field-name">${esc(j.predicate_statement || '—')}</div>
+          <div class="proof-field-name">${esc(j.predicate_statement || ',')}</div>
           <span class="predicate-result ${j.predicate_result}">${j.predicate_result ? 'TRUE' : 'FALSE'}</span>
         </div>
         <div class="provenance-grid">
           <div class="prov-item">
             <div class="prov-item-label">Source Domain</div>
-            <div class="prov-item-value">${esc(j.server_domain || '—')}</div>
+            <div class="prov-item-value">${esc(j.server_domain || ',')}</div>
           </div>
           <div class="prov-item">
             <div class="prov-item-label">Source URL</div>
-            <div class="prov-item-value url">${esc(j.target_url || '—')}</div>
+            <div class="prov-item-value url">${esc(j.target_url || ',')}</div>
           </div>
           <div class="prov-item" style="grid-column: 1 / -1">
             <div class="prov-item-label">Body Hash</div>
-            <div class="prov-item-value hash">${esc(j.body_hash || '—')}</div>
+            <div class="prov-item-value hash">${esc(j.body_hash || ',')}</div>
           </div>
         </div>
       </div>
@@ -586,7 +586,7 @@ async function verify() {
   const matchClass = imageMatch ? 'match' : 'mismatch';
   const matchText = imageMatch
     ? 'OK image_id matches known GPS guest (' + GPS_IMAGE_ID_LABELS[proof.image_id] + ')'
-    : 'FAIL image_id MISMATCH — unknown program';
+    : 'FAIL image_id MISMATCH, unknown program';
   document.getElementById('imageId').innerHTML =
     `<span class="${matchClass}">${matchText}</span><br>` +
     `Program: ${esc(proof.image_id)}<br>` +

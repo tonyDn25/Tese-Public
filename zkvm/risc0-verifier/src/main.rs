@@ -6,13 +6,13 @@ use methods::GPS_GUEST_ID;
 use risc0_zkvm::Receipt;
 use std::fs;
 
-/// GPS — Real STARK proof verifier.
+/// GPS, Real STARK proof verifier.
 ///
 /// Unlike verifier.html (which only checks the image_id whitelist), this tool
 /// calls risc0_zkvm::Receipt::verify() which actually checks the STARK seal.
 /// A dev_mode proof (RISC0_DEV_MODE=1 at generation time) will fail here.
 #[derive(Parser)]
-#[command(name = "risc0-verifier", about = "GPS — Cryptographic STARK proof verifier")]
+#[command(name = "risc0-verifier", about = "GPS, Cryptographic STARK proof verifier")]
 struct Args {
     /// Path to a GPS proof JSON file (output of gps-host prove --output <file>)
     proof: String,
@@ -39,14 +39,14 @@ fn main() -> Result<()> {
     let meta = &proof["metadata"];
 
     println!("----------------------------------------------");
-    println!(" GPS — STARK Proof Verifier");
+    println!(" GPS, STARK Proof Verifier");
     println!("----------------------------------------------");
     println!(" File       : {}", args.proof);
     println!(" Image ID   : {}", proof_image_id);
     println!(" Proof time : {}s", meta["proof_time_seconds"].as_f64()
         .map(|s| format!("{:.1}", s)).unwrap_or_else(|| "?".into()));
     if is_dev_mode {
-        println!(" [!]  Dev mode proof — this will NOT pass real STARK verification");
+        println!(" [!]  Dev mode proof, this will NOT pass real STARK verification");
     }
 
     // Determine which image_id to verify against
@@ -77,7 +77,7 @@ fn main() -> Result<()> {
                     if !r.field_results.is_empty() {
                         for fr in &r.field_results {
                             let icon = if fr.predicate_result { "OK" } else { "FAIL" };
-                            println!(" {} {} — {}", icon, fr.field_label, fr.predicate_statement);
+                            println!(" {} {}, {}", icon, fr.field_label, fr.predicate_statement);
                         }
                     } else {
                         println!(" Statement: {}", r.predicate_statement);
@@ -85,7 +85,7 @@ fn main() -> Result<()> {
                     }
                 }
                 Err(e) => {
-                    println!(" (journal decode failed: {} — raw bytes follow)", e);
+                    println!(" (journal decode failed: {}, raw bytes follow)", e);
                     println!(" Journal  : {:?}",
                         &receipt.journal.bytes[..receipt.journal.bytes.len().min(64)]);
                 }
@@ -104,7 +104,7 @@ fn main() -> Result<()> {
 }
 
 /// Parse a 64-char hex image_id string into the [u32; 8] format used by risc0_zkvm.
-/// Each 8-char chunk is one u32, formatted by `format!("{:08x}", val)` — i.e. big-endian display.
+/// Each 8-char chunk is one u32, formatted by `format!("{:08x}", val)`: i.e. big-endian display.
 fn hex_to_image_id(hex: &str) -> Result<[u32; 8]> {
     anyhow::ensure!(hex.len() == 64, "expected 64 hex chars, got {}", hex.len());
     let mut arr = [0u32; 8];

@@ -3,8 +3,8 @@ name = "risc0-verifier"
 version = "0.1.0"
 edition = "2021"
 
-# Standalone GPS proof verifier — runs real STARK verification via risc0_zkvm.
-# Does NOT require the "prove" feature (verification only — faster compile, no metal/cuda deps).
+# Standalone GPS proof verifier: runs real STARK verification via risc0_zkvm.
+# Does NOT require the "prove" feature (verification only: faster compile, no metal/cuda deps).
 
 [dependencies]
 risc0-zkvm = { version = "3.0.5" }
