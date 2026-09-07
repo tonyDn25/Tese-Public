@@ -1,0 +1,365 @@
+<!DOCTYPE html>
+<html lang="pt-PT">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GPS Demo: signed pages</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: #f0f4f8;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 40px 20px;
+  }
+
+  .header {
+    text-align: center;
+    margin-bottom: 40px;
+  }
+  .header .badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background: #003580;
+    color: white;
+    padding: 6px 16px;
+    border-radius: 20px;
+    font-size: 0.78em;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+    margin-bottom: 16px;
+  }
+  .header h1 {
+    font-size: 2em;
+    color: #0a243e;
+    font-weight: 700;
+    margin-bottom: 8px;
+  }
+  .header p {
+    color: #64748b;
+    font-size: 0.95em;
+    max-width: 520px;
+  }
+
+  .flow {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 40px;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+  .flow-step {
+    background: white;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    padding: 8px 16px;
+    font-size: 0.8em;
+    color: #475569;
+    font-weight: 500;
+  }
+  .flow-arrow {
+    color: #cbd5e1;
+    font-size: 1.2em;
+  }
+
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 20px;
+    width: 100%;
+    max-width: 900px;
+    margin-bottom: 32px;
+  }
+
+  .card {
+    background: white;
+    border-radius: 14px;
+    border: 1px solid #e2e8f0;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+    overflow: hidden;
+    transition: transform 0.15s, box-shadow 0.15s;
+    text-decoration: none;
+    display: flex;
+    flex-direction: column;
+  }
+  .card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 24px rgba(0,0,0,0.1);
+  }
+
+  .card-header {
+    padding: 20px 20px 14px;
+    border-bottom: 1px solid #f1f5f9;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .card-icon {
+    width: 42px;
+    height: 42px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.4em;
+    flex-shrink: 0;
+  }
+  .card-icon.blue   { background: #eff6ff; }
+  .card-icon.green  { background: #f0fdf4; }
+  .card-icon.purple { background: #faf5ff; }
+  .card-icon.orange { background: #fff7ed; }
+  .card-icon.red    { background: #fef2f2; }
+
+  .card-title { font-size: 0.95em; font-weight: 700; color: #1e293b; }
+  .card-route { font-size: 0.75em; color: #94a3b8; font-family: monospace; margin-top: 2px; }
+
+  .card-body {
+    padding: 14px 20px;
+    flex: 1;
+  }
+  .card-desc {
+    font-size: 0.82em;
+    color: #64748b;
+    line-height: 1.5;
+    margin-bottom: 12px;
+  }
+
+  .fields {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .field-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 6px;
+    padding: 3px 8px;
+    font-size: 0.72em;
+    color: #475569;
+    font-family: monospace;
+  }
+  .field-tag .dot {
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background: #22c55e;
+    flex-shrink: 0;
+  }
+
+  .card-footer {
+    padding: 12px 20px;
+    background: #f8fafc;
+    border-top: 1px solid #f1f5f9;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .card-type {
+    font-size: 0.72em;
+    font-weight: 600;
+    padding: 3px 10px;
+    border-radius: 12px;
+  }
+  .card-type.html { background: #dbeafe; color: #1d4ed8; }
+  .card-type.pdf  { background: #fee2e2; color: #dc2626; }
+  .open-btn {
+    font-size: 0.78em;
+    color: #003580;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+
+  .pdf-card .card-header { background: #fff5f5; }
+
+  .instructions {
+    max-width: 900px;
+    width: 100%;
+    background: white;
+    border-radius: 14px;
+    border: 1px solid #e2e8f0;
+    padding: 24px;
+    margin-bottom: 24px;
+  }
+  .instructions h3 {
+    font-size: 0.85em;
+    font-weight: 700;
+    color: #1e293b;
+    margin-bottom: 16px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  .steps-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 12px;
+  }
+  .step-item {
+    display: flex;
+    gap: 10px;
+    align-items: flex-start;
+  }
+  .step-num {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background: #003580;
+    color: white;
+    font-size: 0.72em;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    margin-top: 1px;
+  }
+  .step-text {
+    font-size: 0.8em;
+    color: #475569;
+    line-height: 1.4;
+  }
+
+  .gps-footer {
+    text-align: center;
+    font-size: 0.78em;
+    color: #94a3b8;
+    margin-top: 8px;
+  }
+  .gps-footer strong { color: #64748b; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="badge">🔐 GPS ENABLED</div>
+  <h1>GPS Demo — Real Bank Pages</h1>
+  <p>All pages below are served from a GPS-NGINX server with full RFC 9421 signing. Use the GPS extension to select a field and generate a ZK proof.</p>
+</div>
+
+<div class="flow">
+  <div class="flow-step">1. Open page</div>
+  <div class="flow-arrow">→</div>
+  <div class="flow-step">2. Click GPS icon</div>
+  <div class="flow-arrow">→</div>
+  <div class="flow-step">3. Select label + value</div>
+  <div class="flow-arrow">→</div>
+  <div class="flow-step">4. Enter predicate</div>
+  <div class="flow-arrow">→</div>
+  <div class="flow-step">5. Generate proof</div>
+</div>
+
+<div class="instructions">
+  <h3>How to use</h3>
+  <div class="steps-grid">
+    <div class="step-item">
+      <div class="step-num">1</div>
+      <div class="step-text">Click any page below to open it. The GPS extension will automatically capture the signed session.</div>
+    </div>
+    <div class="step-item">
+      <div class="step-num">2</div>
+      <div class="step-text">Click the GPS popup icon in the toolbar. Click "Select a value on the page".</div>
+    </div>
+    <div class="step-item">
+      <div class="step-num">3</div>
+      <div class="step-text">Click the <strong>label</strong> first (e.g. "Saldo contabilístico"), then click the <strong>value</strong>.</div>
+    </div>
+    <div class="step-item">
+      <div class="step-num">4</div>
+      <div class="step-text">Enter a predicate like <code style="background:#f1f5f9;padding:1px 4px;border-radius:3px">> 1000</code> and click Generate.</div>
+    </div>
+  </div>
+</div>
+
+<div class="grid">
+
+  <!-- Homepage -->
+  
+
+  <!-- Login -->
+  
+
+  <!-- MyPage -->
+  <a class="card" href="/mypage" target="_blank">
+    <div class="card-header">
+      <div class="card-icon green">👤</div>
+      <div>
+        <div class="card-title">My Account Page</div>
+        <div class="card-route">/mypage</div>
+      </div>
+    </div>
+    <div class="card-body">
+      <div class="card-desc">Authenticated account overview. Prove your name without revealing account numbers or balances.</div>
+      <div class="fields">
+        <div class="field-tag"><span class="dot"></span>Bem-vindo → account holder name</div>
+        <div class="field-tag"><span class="dot"></span>Account type</div>
+      </div>
+    </div>
+    <div class="card-footer">
+      <span class="card-type html">HTML</span>
+      <span class="open-btn">Open →</span>
+    </div>
+  </a>
+
+  <!-- Balance -->
+  <a class="card" href="/balancepage" target="_blank">
+    <div class="card-header">
+      <div class="card-icon orange">💶</div>
+      <div>
+        <div class="card-title">Balance Page</div>
+        <div class="card-route">/balancepage</div>
+      </div>
+    </div>
+    <div class="card-body">
+      <div class="card-desc">Demo balance page, European number formatting. Prove your balance exceeds a threshold without revealing the exact amount.</div>
+      <div class="fields">
+        <div class="field-tag"><span class="dot"></span>Saldo contabilístico → balance</div>
+        <div class="field-tag"><span class="dot"></span>Saldo disponível → available</div>
+        <div class="field-tag"><span class="dot"></span>IBAN (starts with PT)</div>
+      </div>
+    </div>
+    <div class="card-footer">
+      <span class="card-type html">HTML</span>
+      <span class="open-btn">Open →</span>
+    </div>
+  </a>
+
+  <!-- PDF -->
+  <a class="card pdf-card" href="/comprovativo.pdf" target="_blank">
+    <div class="card-header">
+      <div class="card-icon red">📄</div>
+      <div>
+        <div class="card-title">Comprovativo PDF</div>
+        <div class="card-route">/comprovativo.pdf</div>
+      </div>
+    </div>
+    <div class="card-body">
+      <div class="card-desc">Signed operation receipt PDF. GPS signs the binary PDF and proves fields extracted from the compressed content stream.</div>
+      <div class="fields">
+        <div class="field-tag"><span class="dot"></span>Contribuinte → tax identifier</div>
+        <div class="field-tag"><span class="dot"></span>Document type</div>
+        <div class="field-tag"><span class="dot"></span>Date range</div>
+      </div>
+    </div>
+    <div class="card-footer">
+      <span class="card-type pdf">PDF</span>
+      <span class="open-btn">Open →</span>
+    </div>
+  </a>
+
+</div>
+
+<div class="gps-footer">
+  <strong>GPS, the General Privacy-preserving web proof System</strong> · All pages signed with RFC 9421 ECDSA P-256 · Proofs generated by RISC Zero zkVM
+</div>
+
+</body>
+</html>

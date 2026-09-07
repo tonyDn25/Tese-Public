@@ -1,0 +1,11 @@
+[workspace]
+resolver = "2"
+members = ["host", "methods", "gps-core", "risc0-verifier"]
+exclude = ["methods/guest"]
+
+[profile.dev]
+opt-level = 3
+
+[profile.release]
+debug = 1
+lto = true

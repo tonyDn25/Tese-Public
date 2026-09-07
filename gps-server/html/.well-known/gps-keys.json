@@ -1,0 +1,11 @@
+[
+  {
+    "entry": {
+      "keyid": "gps-nginx",
+      "domain": "172.18.0.50",
+      "leaf_pubkey_pem": "-----BEGIN PUBLIC KEY-----\nMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEHg+UOK8b7ZXIKH3Yu3moGpaWrrZ/\nvV/36sQ+5NuyTA0YhpQFBV3mpuAoDH1gZtiWEgb5Kn6MyIZVAk4k6EF9hw==\n-----END PUBLIC KEY-----",
+      "not_after": 0
+    },
+    "root_sig_b64": "MEQCIGXCUXfiEn+CjDp5V6vaAq9VkxsJRPCPqyWEi2eRyoPEAiBRZWdAGG27xl9RRFH5pF7QBf4F/YWajYU1PC+awBJeKA=="
+  }
+]

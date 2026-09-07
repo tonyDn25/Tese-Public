@@ -1,0 +1,29 @@
+[package]
+name = "host"
+version = "0.1.0"
+edition = "2021"
+
+[features]
+# Compiles the forged-value attack simulator (GPS_SIM_FORGE_VALUE). OFF by default
+# so the production binary cannot be told to inject a forged host hint. Even with it
+# on, the guest's in-circuit binding rejects the forgery — it is a negative test.
+attack-sim = []
+
+[dependencies]
+risc0-zkvm = { version = "3.0.5", features = ["prove"] }
+methods = { path = "../methods" }
+gps-core = { path = "../gps-core" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+anyhow = "1"
+clap = { version = "4", features = ["derive"] }
+dirs = "5"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+bincode = "1"
+base64 = "0.22"
+sha2 = "0.10"
+hex = "0.4"
+chrono = { version = "0.4", features = ["serde"] }
+reqwest = { version = "0.12", features = ["json", "blocking"] }
+tokio = { version = "1", features = ["full"] }
+regex = "1"

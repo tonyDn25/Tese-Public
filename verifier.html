@@ -1,0 +1,597 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GPS Proof Verifier</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: #0a0e1a;
+    color: #e2e8f0;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 32px 20px;
+  }
+
+  .logo { font-size: 2.5em; margin-bottom: 8px; }
+  h1 { font-size: 1.6em; font-weight: 700; color: #f8fafc; margin-bottom: 6px; }
+  .subtitle { color: #64748b; font-size: 0.9em; margin-bottom: 40px; text-align: center; max-width: 640px; }
+
+  .card {
+    background: #111827;
+    border: 1px solid #1e293b;
+    border-radius: 16px;
+    padding: 32px;
+    width: 100%;
+    max-width: 680px;
+    box-shadow: 0 4px 32px rgba(0,0,0,0.4);
+  }
+
+  .drop-zone {
+    border: 2px dashed #334155;
+    border-radius: 12px;
+    padding: 48px 24px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.2s;
+    margin-bottom: 20px;
+  }
+  .drop-zone:hover, .drop-zone.drag-over {
+    border-color: #3b82f6;
+    background: rgba(59,130,246,0.05);
+  }
+  .drop-zone .icon { font-size: 2.5em; margin-bottom: 12px; }
+  .drop-zone p { color: #64748b; font-size: 0.9em; }
+  .drop-zone strong { color: #94a3b8; }
+
+  .or { text-align: center; color: #334155; margin: 16px 0; font-size: 0.85em; }
+
+  textarea {
+    width: 100%;
+    height: 120px;
+    background: #0f172a;
+    border: 1px solid #1e293b;
+    border-radius: 8px;
+    color: #94a3b8;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.78em;
+    padding: 12px;
+    resize: vertical;
+    outline: none;
+  }
+  textarea:focus { border-color: #3b82f6; }
+  textarea::placeholder { color: #334155; }
+
+  .btn {
+    width: 100%;
+    padding: 14px;
+    background: #2563eb;
+    color: white;
+    border: none;
+    border-radius: 10px;
+    font-size: 1em;
+    font-weight: 600;
+    cursor: pointer;
+    margin-top: 16px;
+    transition: background 0.2s;
+  }
+  .btn:hover { background: #1d4ed8; }
+  .btn:disabled { background: #1e293b; color: #475569; cursor: not-allowed; }
+
+  /* Result */
+  .result {
+    margin-top: 24px;
+    border-radius: 12px;
+    padding: 24px;
+    display: none;
+  }
+  .result.valid {
+    background: rgba(16,185,129,0.08);
+    border: 1px solid rgba(16,185,129,0.3);
+  }
+  .result.invalid {
+    background: rgba(239,68,68,0.08);
+    border: 1px solid rgba(239,68,68,0.3);
+  }
+  .result.devmode {
+    background: rgba(234,179,8,0.08);
+    border: 1px solid rgba(234,179,8,0.3);
+  }
+
+  .result-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 20px;
+  }
+  .result-icon { font-size: 2em; }
+  .result-title { font-size: 1.2em; font-weight: 700; }
+  .result.valid .result-title { color: #10b981; }
+  .result.invalid .result-title { color: #ef4444; }
+  .result.devmode .result-title { color: #eab308; }
+
+  /* Section headers inside result */
+  .section-label {
+    font-size: 0.68em;
+    font-weight: 700;
+    color: #3b82f6;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin: 18px 0 8px;
+  }
+  .section-label:first-child { margin-top: 0; }
+
+  .fields { display: flex; flex-direction: column; gap: 6px; }
+  .field {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    padding: 9px 12px;
+    background: rgba(255,255,255,0.03);
+    border-radius: 8px;
+    gap: 16px;
+  }
+  .field-label {
+    font-size: 0.7em;
+    font-weight: 600;
+    color: #64748b;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    white-space: nowrap;
+    padding-top: 1px;
+    min-width: 90px;
+  }
+  .field-value {
+    font-size: 0.83em;
+    color: #e2e8f0;
+    text-align: right;
+    font-family: 'JetBrains Mono', monospace;
+    word-break: break-all;
+  }
+  .field-value.mono { font-size: 0.73em; color: #94a3b8; }
+  .field-value.muted { font-size: 0.73em; color: #475569; }
+
+  .predicate-result {
+    display: inline-block;
+    padding: 2px 10px;
+    border-radius: 12px;
+    font-size: 0.8em;
+    font-weight: 700;
+  }
+  .predicate-result.true { background: #064e3b; color: #34d399; }
+  .predicate-result.false { background: #450a0a; color: #f87171; }
+
+  /* Per-field proof card */
+  .proof-field-card {
+    border: 1px solid #1e293b;
+    border-radius: 10px;
+    padding: 14px 16px;
+    margin-bottom: 10px;
+    background: rgba(255,255,255,0.02);
+  }
+  .proof-field-card:last-child { margin-bottom: 0; }
+
+  .proof-field-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+  }
+  .proof-field-name {
+    font-size: 0.82em;
+    font-weight: 700;
+    color: #cbd5e1;
+  }
+
+  .provenance-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px;
+    margin-top: 8px;
+  }
+  .prov-item {
+    background: rgba(0,0,0,0.2);
+    border-radius: 6px;
+    padding: 7px 10px;
+  }
+  .prov-item-label {
+    font-size: 0.62em;
+    font-weight: 700;
+    color: #475569;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 3px;
+  }
+  .prov-item-value {
+    font-size: 0.73em;
+    color: #94a3b8;
+    font-family: 'JetBrains Mono', monospace;
+    word-break: break-all;
+  }
+  .prov-item-value.url { color: #60a5fa; }
+  .prov-item-value.hash { font-size: 0.65em; color: #475569; }
+
+  .image-id {
+    margin-top: 16px;
+    padding: 10px 14px;
+    background: rgba(255,255,255,0.02);
+    border-radius: 8px;
+    font-size: 0.68em;
+    color: #334155;
+    font-family: monospace;
+    word-break: break-all;
+    line-height: 1.6;
+  }
+  .image-id .match { color: #10b981; }
+  .image-id .mismatch { color: #ef4444; }
+
+  .devmode-badge {
+    display: inline-block;
+    background: rgba(234,179,8,0.15);
+    color: #eab308;
+    border: 1px solid rgba(234,179,8,0.3);
+    border-radius: 6px;
+    padding: 3px 10px;
+    font-size: 0.75em;
+    font-weight: 700;
+    margin-top: 4px;
+  }
+
+  .spinner {
+    display: none;
+    text-align: center;
+    padding: 24px;
+    color: #64748b;
+    font-size: 0.9em;
+  }
+
+  .how-it-works {
+    margin-top: 32px;
+    max-width: 680px;
+    text-align: center;
+  }
+  .how-it-works h3 { color: #475569; font-size: 0.8em; font-weight: 600;
+    text-transform: uppercase; letter-spacing: 1px; margin-bottom: 16px; }
+  .steps { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+  .step {
+    background: #111827;
+    border: 1px solid #1e293b;
+    border-radius: 10px;
+    padding: 14px 18px;
+    font-size: 0.8em;
+    color: #64748b;
+    flex: 1;
+    min-width: 140px;
+    max-width: 180px;
+  }
+  .step .step-num { color: #3b82f6; font-weight: 700; margin-bottom: 4px; }
+</style>
+</head>
+<body>
+
+<div class="logo"></div>
+<h1>GPS Proof Verifier</h1>
+<p class="subtitle">Performs <strong>real STARK verification</strong> when the local <code>gps-host verify-serve</code> service is running; otherwise falls back to an honest journal-only inspection (and tells you which one happened).</p>
+
+<div class="card">
+  <div class="drop-zone" id="dropZone">
+    <div class="icon"></div>
+    <strong>Drop proof JSON here</strong>
+    <p>or click to browse</p>
+    <input type="file" id="fileInput" accept=".json" style="display:none">
+  </div>
+
+  <div class="or">— or paste proof JSON —</div>
+
+  <textarea id="proofInput" placeholder='{"image_id": "...", "seal": "...", "journal": {...}}'></textarea>
+
+  <button class="btn" id="verifyBtn" onclick="verify()">Inspect Proof</button>
+
+  <div style="margin-top:10px;padding:10px 12px;border:1px solid #14361f;background:#0b1a10;border-radius:8px;color:#5fbf83;font-size:0.78em">
+ <strong>Real verification</strong> requires the local service: run
+    <code>gps-host verify-serve</code> and this page will perform a genuine STARK
+    <code>receipt.verify()</code>. If the service is offline it falls back to a
+    journal-only inspection and says so explicitly (it will never claim cryptographic
+    validity it did not check). CLI alternative: <code>gps-host verify --proof &lt;file&gt;</code>.
+  </div>
+
+  <div class="spinner" id="spinner"> Reading proof…</div>
+
+  <div class="result" id="result">
+    <div class="result-header">
+      <div class="result-icon" id="resultIcon"></div>
+      <div>
+        <div class="result-title" id="resultTitle"></div>
+        <div style="color:#64748b;font-size:0.82em;margin-top:2px" id="resultSubtitle"></div>
+        <div id="devmodeBadge"></div>
+      </div>
+    </div>
+
+    <!-- Top-level summary -->
+    <div class="section-label">Proof Summary</div>
+    <div class="fields" id="summaryFields"></div>
+
+    <!-- Per-field results with provenance -->
+    <div class="section-label" id="fieldsSectionLabel" style="display:none">Field Results &amp; Provenance</div>
+    <div id="proofFieldCards"></div>
+
+    <!-- Image ID + metadata -->
+    <div class="image-id" id="imageId"></div>
+  </div>
+</div>
+
+<div class="how-it-works">
+  <h3>How it works</h3>
+  <div class="steps">
+    <div class="step">
+      <div class="step-num">01</div>
+      Server signs page with RFC 9421 using ECDSA P-256
+    </div>
+    <div class="step">
+      <div class="step-num">02</div>
+      zkVM verifies signature and evaluates predicate inside ZK proof
+    </div>
+    <div class="step">
+      <div class="step-num">03</div>
+      STARK proof binds result to server identity and page content
+    </div>
+    <div class="step">
+      <div class="step-num">04</div>
+      Anyone can verify field provenance without seeing the data
+    </div>
+  </div>
+</div>
+
+<script>
+// Current GPS guest image_id — update when guest is rebuilt
+// Known valid GPS guest image_ids — add new ones when guest is rebuilt
+const GPS_IMAGE_ID_LABELS = {
+  '71442f7b757c93edf1a14b0535a68b427d80818a156a9eb4ff2c936cfbc2e65b': 'v12 (current: anchored dates, salted commitments)',
+  '97f01cdf9e73615c830284fc1102f26136a572ba4ad0c419ed69e6f035342a55': 'v11 (superseded 2026-09-05; unsalted commitments)',
+  '1954e5a600c8574dd2df1d03daaf7e967398f78b03df46bed03711233a1d68d3': 'v11 (key-distribution, pre-reproducible)',
+  '92ebd6bcdd3dec26e63a0a5c37d4111c2dc053499432324e99d45e5260793962': 'v10.1-anchored',
+  '833701f90525fe6a7db150a59c4fbf85d6140aea75f3ac15e99101268a4f1b69': 'v10-anchored',
+  '013313c0aba94cfc3f9cc46849fd95857c285901df55d21398ae1947159624a9': 'v8-fixed',
+  '00438ad31acc4fca326c3eb97ae42f9ad165d87dc599b6ef12ff6c365131575b': 'v7-cli',
+  '97e2fb4824f6d76c6ba5e6f9b1bab1b9c678a26795600a489e0acda75c6ec267': 'v7-ext',
+  'd3e7e71844c4b9449191ea2bd4aaf7c853ca94172c61069a2e816cf20908cadc': 'v6-multi',
+  'f723840c8937d3c0566aeac8bea699dcb1c50eaab85a542fb93dab14f3765886': 'v5',
+};
+const GPS_IMAGE_IDS = Object.keys(GPS_IMAGE_ID_LABELS);
+const GPS_IMAGE_ID = GPS_IMAGE_IDS[0]; // latest
+
+// Local real-verifier service (gps-host verify-serve). When reachable, this page
+// performs genuine STARK verification; otherwise it inspects the journal only.
+const VERIFY_SERVICE_URL = 'http://127.0.0.1:8788/verify';
+
+const dropZone = document.getElementById('dropZone');
+const fileInput = document.getElementById('fileInput');
+
+dropZone.addEventListener('click', () => fileInput.click());
+dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('drag-over'); });
+dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
+dropZone.addEventListener('drop', e => {
+  e.preventDefault();
+  dropZone.classList.remove('drag-over');
+  const file = e.dataTransfer.files[0];
+  if (file) readFile(file);
+});
+fileInput.addEventListener('change', () => { if (fileInput.files[0]) readFile(fileInput.files[0]); });
+
+function readFile(file) {
+  const reader = new FileReader();
+  reader.onload = e => {
+    document.getElementById('proofInput').value = e.target.result;
+    dropZone.querySelector('strong').textContent = file.name;
+    dropZone.querySelector('p').textContent = (file.size / 1024).toFixed(0) + ' KB';
+  };
+  reader.readAsText(file);
+}
+
+function esc(s) {
+  return String(s ?? '')
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function shortHash(h) {
+  if (!h) return '—';
+  return h.length > 16 ? h.slice(0, 16) + '…' : h;
+}
+
+function fmtTimestamp(ts) {
+  if (!ts) return '—';
+  const n = parseInt(ts);
+  if (isNaN(n)) return esc(ts);
+  return new Date(n * 1000).toLocaleString();
+}
+
+async function verify() {
+  const input = document.getElementById('proofInput').value.trim();
+  if (!input) { alert('Please provide a proof JSON'); return; }
+
+  let proof;
+  try { proof = JSON.parse(input); }
+  catch(e) { alert('Invalid JSON: ' + e.message); return; }
+
+  if (!proof.seal || !proof.journal || !proof.image_id) {
+    alert('Missing required fields: seal, journal, image_id');
+    return;
+  }
+
+  document.getElementById('verifyBtn').disabled = true;
+  document.getElementById('result').style.display = 'none';
+  document.getElementById('spinner').style.display = 'block';
+  document.getElementById('spinner').textContent = ' Verifying STARK seal via local service…';
+
+  // Attempt REAL cryptographic verification via the local gps-host service
+  // (`gps-host verify-serve`). If it is running, the result below reflects an actual
+  // receipt.verify() against the guest image_id. If not, we fall back to an honest
+  // journal-only inspection and say so.
+  let stark = { reachable: false, valid: false, error: '', data: {} };
+  try {
+    const r = await fetch(VERIFY_SERVICE_URL, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(proof),
+    });
+    const data = await r.json();
+    stark = { reachable: true, valid: data.valid === true, error: data.error || '', data };
+  } catch (e) {
+    stark = { reachable: false, valid: false, error: String(e), data: {} };
+  }
+
+  document.getElementById('spinner').style.display = 'none';
+  document.getElementById('verifyBtn').disabled = false;
+
+  const j = proof.journal;
+  const meta = proof.metadata || {};
+  const isDevMode = meta.dev_mode === true;
+  const imageMatch = GPS_IMAGE_IDS.includes(proof.image_id);
+  const fieldResults = Array.isArray(j.field_results) ? j.field_results : [];
+  const allPredicatesTrue = fieldResults.length > 0
+    ? fieldResults.every(r => r.predicate_result === true)
+    : j.predicate_result === true;
+
+  // When the service is reachable, the REAL STARK result is authoritative.
+  // Otherwise fall back to the (clearly-labelled) journal-only check.
+  const isValid = stark.reachable ? stark.valid : (imageMatch && allPredicatesTrue);
+
+  const result = document.getElementById('result');
+  result.className = 'result ' + (isValid ? 'valid' : 'invalid');
+  result.style.display = 'block';
+  document.getElementById('devmodeBadge').innerHTML = isDevMode
+    ? '<span class="devmode-badge">[!] DEV MODE seal — a real STARK verify will reject it</span>' : '';
+
+  if (stark.reachable) {
+    document.getElementById('resultIcon').textContent = isValid ? 'OK' : 'FAIL';
+    document.getElementById('resultTitle').textContent = isValid
+      ? 'STARK proof VERIFIED (real)'
+      : 'STARK verification FAILED';
+    document.getElementById('resultSubtitle').textContent = isValid
+      ? ('Cryptographically verified by the local gps-host service against image_id '
+          + String(stark.data.image_id || '').slice(0, 12) + '…')
+      : ('The seal did not verify: ' + (stark.error || 'invalid'));
+  } else {
+    document.getElementById('resultIcon').textContent = isValid ? 'ℹ' : 'FAIL';
+    document.getElementById('resultTitle').textContent = isValid
+      ? 'Journal checks passed (NOT STARK-verified)'
+      : (!imageMatch ? 'Invalid — Program Mismatch' : 'Journal check failed — Predicate FALSE');
+    document.getElementById('resultSubtitle').textContent = isValid
+      ? 'Verify service offline — journal + image id only. Start it with `gps-host verify-serve`, or run `gps-host verify --proof <file>`.'
+      : 'Journal inspection failed';
+  }
+
+  // -- Summary fields ----------------------------------------------------
+  const summaryRows = [
+    ['Server', esc(j.server_domain)],
+    ['Trust Anchor', esc(j.trust_anchor)],
+    ['Timestamp', fmtTimestamp(j.server_timestamp)],
+    ['Session ID', `<span class="field-value mono">${esc(j.session_id)}</span>`],
+    ['Proof Size', meta.proof_size_bytes
+      ? (meta.proof_size_bytes / 1024).toFixed(0) + ' KB'
+      : '—'],
+    ['Proof Time', meta.proof_time_seconds
+      ? meta.proof_time_seconds.toFixed(1) + 's'
+      : '—'],
+    ['Generated', meta.proof_generation_time
+      ? esc(meta.proof_generation_time.slice(0, 19).replace('T', ' '))
+      : '—'],
+  ];
+
+  document.getElementById('summaryFields').innerHTML = summaryRows.map(([label, value]) => `
+    <div class="field">
+      <div class="field-label">${label}</div>
+      <div class="field-value">${value}</div>
+    </div>
+  `).join('');
+
+  // -- Per-field results with provenance --------------------------------
+  const cardsEl = document.getElementById('proofFieldCards');
+  const labelEl = document.getElementById('fieldsSectionLabel');
+
+  if (fieldResults.length > 0) {
+    labelEl.style.display = 'block';
+    cardsEl.innerHTML = fieldResults.map((fr, i) => {
+      const prov = fr.provenance || {};
+      const ok = fr.predicate_result === true;
+      return `
+        <div class="proof-field-card">
+          <div class="proof-field-header">
+            <div class="proof-field-name">Field ${i+1}: ${esc(fr.field_label || fr.field_selected || '—')}</div>
+            <span class="predicate-result ${ok}">${ok ? 'TRUE' : 'FALSE'}</span>
+          </div>
+          <div class="fields">
+            <div class="field">
+              <div class="field-label">Statement</div>
+              <div class="field-value">${esc(fr.predicate_statement)}</div>
+            </div>
+          </div>
+          <div class="provenance-grid">
+            <div class="prov-item">
+              <div class="prov-item-label">Source Domain</div>
+              <div class="prov-item-value">${esc(prov.source_domain || j.server_domain || '—')}</div>
+            </div>
+            <div class="prov-item">
+              <div class="prov-item-label">Source URL</div>
+              <div class="prov-item-value url">${esc(prov.source_url || j.target_url || '—')}</div>
+            </div>
+            <div class="prov-item">
+              <div class="prov-item-label">Session ID</div>
+              <div class="prov-item-value hash">${esc(prov.source_session_id || j.session_id || '—')}</div>
+            </div>
+            <div class="prov-item">
+              <div class="prov-item-label">Trust Anchor</div>
+              <div class="prov-item-value">${esc(prov.trust_anchor || j.trust_anchor || '—')}</div>
+            </div>
+            <div class="prov-item" style="grid-column: 1 / -1">
+              <div class="prov-item-label">Body Hash (SHA-256 of signed response body)</div>
+              <div class="prov-item-value hash">${esc(prov.source_body_hash || j.body_hash || '—')}</div>
+            </div>
+          </div>
+        </div>
+      `;
+    }).join('');
+  } else {
+    // Legacy single-field proof
+    labelEl.style.display = 'block';
+    cardsEl.innerHTML = `
+      <div class="proof-field-card">
+        <div class="proof-field-header">
+          <div class="proof-field-name">${esc(j.predicate_statement || '—')}</div>
+          <span class="predicate-result ${j.predicate_result}">${j.predicate_result ? 'TRUE' : 'FALSE'}</span>
+        </div>
+        <div class="provenance-grid">
+          <div class="prov-item">
+            <div class="prov-item-label">Source Domain</div>
+            <div class="prov-item-value">${esc(j.server_domain || '—')}</div>
+          </div>
+          <div class="prov-item">
+            <div class="prov-item-label">Source URL</div>
+            <div class="prov-item-value url">${esc(j.target_url || '—')}</div>
+          </div>
+          <div class="prov-item" style="grid-column: 1 / -1">
+            <div class="prov-item-label">Body Hash</div>
+            <div class="prov-item-value hash">${esc(j.body_hash || '—')}</div>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  // -- Image ID footer ---------------------------------------------------
+  const matchClass = imageMatch ? 'match' : 'mismatch';
+  const matchText = imageMatch
+    ? 'OK image_id matches known GPS guest (' + GPS_IMAGE_ID_LABELS[proof.image_id] + ')'
+    : 'FAIL image_id MISMATCH — unknown program';
+  document.getElementById('imageId').innerHTML =
+    `<span class="${matchClass}">${matchText}</span><br>` +
+    `Program: ${esc(proof.image_id)}<br>` +
+    `Expected: ${GPS_IMAGE_ID}`;
+}
+</script>
+</body>
+</html>

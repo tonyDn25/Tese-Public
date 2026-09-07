@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>GPS</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <!-- Header -->
+  <header>
+    <div class="logo">
+      <span class="logo-icon"></span>
+      <span class="logo-text">GPS</span>
+      <span class="logo-sub">General Privacy-preserving web proof System</span>
+    </div>
+    <div class="host-status">
+      <span id="host-dot" class="dot dot-grey"></span>
+      <span id="host-text">connecting…</span>
+    </div>
+  </header>
+
+  <!-- Step 1: Select Field -->
+  <section class="section">
+    <div class="step-header">
+      <span class="step-num">1</span>
+      <span class="step-label">Select a value on the page</span>
+    </div>
+
+    <button id="select-btn" class="action-btn">
+ Click to select field
+    </button>
+
+    <!-- PDF mode: manual value input -->
+    <div id="pdf-input-row" class="pdf-input-row hidden">
+      <input id="pdf-value-input" type="text" class="path-input"
+             placeholder="Type value to prove (e.g. ANTONIO SILVA)">
+      <button id="pdf-value-confirm" class="path-save-btn">OK</button>
+    </div>
+    <div id="pdf-hint" class="predicate-hint hidden">
+      PDF page: type the value you want to prove from the document.
+    </div>
+
+    <div id="selected-display" class="selected-display hidden">
+      <div class="selected-row">
+        <span class="selected-label">Value</span>
+        <span id="selected-value" class="selected-value"></span>
+      </div>
+      <div class="selected-row">
+        <span class="selected-label">Path</span>
+        <span id="selected-path" class="selected-path"></span>
+      </div>
+      <div id="path-edit-row" class="path-edit-row hidden">
+        <input id="path-input" type="text" class="path-input" placeholder="e.g. user.name">
+        <button id="path-save-btn" class="path-save-btn">OK</button>
+      </div>
+      <button id="path-edit-btn" class="link-btn"> Edit path manually</button>
+    </div>
+  </section>
+
+  <div class="divider"></div>
+
+  <!-- Step 2: Predicate -->
+  <section class="section">
+    <div class="step-header">
+      <span class="step-num">2</span>
+      <span class="step-label">Enter predicate</span>
+    </div>
+    <div class="predicate-row">
+      <span id="predicate-field-preview" class="predicate-field">&ndash;</span>
+      <input id="predicate-input" type="text" class="predicate-input"
+             placeholder='== "Alice"  or  >= 1000  or  == true'
+             disabled>
+    </div>
+    <div class="predicate-hint">
+      Operators: <code>==</code> <code>!=</code> <code>&gt;=</code> <code>&lt;=</code> <code>&gt;</code> <code>&lt;</code>
+    </div>
+
+    <!-- "Add another?" prompt, shown after predicate confirmed via Enter -->
+    <div id="add-another-prompt" class="add-another-prompt hidden">
+      <span class="add-another-label">Add another field to the proof?</span>
+      <div class="add-another-btns">
+        <button id="add-another-yes" class="add-another-btn yes">＋ Add another field</button>
+      </div>
+    </div>
+  </section>
+
+  <div class="divider"></div>
+
+  <!-- Step 3: Generate -->
+  <section class="section">
+    <div class="step-header">
+      <span class="step-num">3</span>
+      <span id="step3-label" class="step-label">Generate ZK Proof</span>
+    </div>
+
+    <!-- Accumulated fields list -->
+    <div id="fields-list" class="fields-list hidden"></div>
+
+    <div class="dev-row">
+      <label class="dev-label">
+        <input type="checkbox" id="dev-mode" checked>
+        Dev mode (fast, not cryptographically valid)
+      </label>
+    </div>
+
+    <button id="prove-btn" class="prove-btn" disabled>Generate Proof</button>
+
+    <div id="progress" class="progress hidden">
+      <div class="spinner"></div>
+      <span id="progress-text">Generating proof…</span>
+    </div>
+  </section>
+
+  <!-- Error -->
+  <div id="error-box" class="error-box hidden"></div>
+
+  <!-- Result -->
+  <div id="result-box" class="result-box hidden">
+    <div id="result-header" class="result-header"></div>
+
+    <div class="proof-json-wrap">
+      <pre id="proof-json" class="proof-json"></pre>
+    </div>
+
+    <div class="result-actions">
+      <button id="copy-btn" class="result-btn copy-btn"> Copy JSON</button>
+      <button id="download-btn" class="result-btn download-btn"> Download Proof</button>
+    </div>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>

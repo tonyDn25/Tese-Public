@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="pt-PT">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GPS Demo Bank : A minha pagina</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: #f0f4f8; min-height: 100vh; display: flex; flex-direction: column; }
+  header { background: #003580; color: white; padding: 16px 32px;
+    display: flex; align-items: center; gap: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.3); }
+  header h1 { font-size: 1.4em; font-weight: 600; }
+  .badge { background: #22c55e; color: white; font-size: 0.7em;
+    padding: 2px 8px; border-radius: 12px; font-weight: 600; }
+  nav { background: #002460; padding: 0 32px; display: flex; gap: 0; }
+  nav a { color: rgba(255,255,255,0.7); text-decoration: none; padding: 12px 20px;
+    font-size: 0.9em; display: block; }
+  nav a.active, nav a:hover { color: white; background: rgba(255,255,255,0.1); }
+  main { max-width: 680px; margin: 32px auto; padding: 0 20px; width: 100%; }
+  .welcome { background: white; border-radius: 12px; padding: 20px 24px;
+    margin-bottom: 20px; border-left: 4px solid #003580;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.08); }
+  .welcome h2 { color: #003580; font-size: 1.1em; margin-bottom: 4px; }
+  .welcome p { color: #666; font-size: 0.88em; }
+  .fields { display: flex; flex-direction: column; gap: 14px; }
+  .field { background: white; border-radius: 12px; padding: 18px 22px;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.08); display: flex;
+    justify-content: space-between; align-items: center; }
+  .field .label { font-size: 0.76em; font-weight: 600; color: #888;
+    text-transform: uppercase; letter-spacing: 0.6px; margin-bottom: 4px; }
+  .field .value { font-size: 1.2em; color: #1a1a1a; font-weight: 500; }
+  .field .icon { font-size: 1.6em; opacity: 0.12; }
+  .actions { display: flex; gap: 12px; margin-top: 20px; }
+  .btn { flex: 1; padding: 10px; border: 1px solid #003580; border-radius: 8px;
+    color: #003580; background: white; font-size: 0.88em; cursor: pointer;
+    text-align: center; text-decoration: none; font-weight: 500; }
+  .btn.primary { background: #003580; color: white; }
+  .gps-badge { background: #f0fdf4; border: 1px solid #86efac; border-radius: 8px;
+    padding: 10px 14px; margin-top: 16px; font-size: 0.78em; color: #166534; }
+</style>
+</head>
+<body>
+<header>
+  <span style="font-size:1.6em"></span>
+  <h1>GPS Demo Bank</h1>
+  <span class="badge">RFC 9421 SIGNED</span>
+</header>
+<nav>
+  <a href="/">Home</a>
+  <a href="/account">Conta</a>
+  <a href="/balancepage">Saldos</a>
+  <a href="/mypage" class="active">A minha pagina</a>
+</nav>
+<main>
+  <div class="welcome">
+    <h2>Bem-vindo, Antonio Silva</h2>
+    <p>Esta pagina e assinada pelo servidor com HTTP Message Signatures (RFC 9421).</p>
+  </div>
+  <div class="fields">
+    <div class="field">
+      <div>
+        <div class="label">Titular</div>
+        <div class="value" id="holder">Antonio Silva</div>
+      </div>
+      <span class="icon"></span>
+    </div>
+    <div class="field">
+      <div>
+        <div class="label">Numero de cliente</div>
+        <div class="value" id="client">4471203</div>
+      </div>
+      <span class="icon"></span>
+    </div>
+    <div class="field">
+      <div>
+        <div class="label">Ultimo acesso</div>
+        <div class="value" id="lastseen">2026-09-06 21:40</div>
+      </div>
+      <span class="icon"></span>
+    </div>
+  </div>
+  <div class="gps-badge">Signed response. The account holder name above is the field the welcome-name case extracts.</div>
+</main>
+</body>
+</html>

@@ -1,0 +1,39 @@
+{
+  "manifest_version": 2,
+  "name": "GPS - General Privacy-preserving web proof System",
+  "version": "2.0.0",
+  "description": "Zero-knowledge proofs for selective disclosure of web data",
+  "background": {
+    "scripts": ["background/background.js"],
+    "persistent": true
+  },
+  "browser_action": {
+    "default_popup": "popup/popup.html",
+    "default_title": "GPS"
+  },
+  "permissions": [
+    "storage",
+    "tabs",
+    "activeTab",
+    "nativeMessaging",
+    "scripting",
+    "webRequest",
+    "webNavigation",
+    "http://*/*",
+    "https://*/*"
+  ],
+  "content_scripts": [
+    {
+      "matches": ["https://*/*", "http://*/*"],
+      "js": ["content/content.js"],
+      "run_at": "document_idle",
+      "all_frames": false
+    }
+  ],
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "gps@ist.pt",
+      "strict_min_version": "109.0"
+    }
+  }
+}

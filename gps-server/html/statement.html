@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GPS Demo Bank — Statement</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: #f0f4f8; min-height: 100vh; display: flex; flex-direction: column; }
+  header { background: #003580; color: white; padding: 16px 32px;
+    display: flex; align-items: center; gap: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.3); }
+  header h1 { font-size: 1.4em; font-weight: 600; }
+  .badge { background: #22c55e; color: white; font-size: 0.7em;
+    padding: 2px 8px; border-radius: 12px; font-weight: 600; }
+  nav { background: #002460; padding: 0 32px; display: flex; }
+  nav a { color: rgba(255,255,255,0.7); text-decoration: none;
+    padding: 12px 20px; font-size: 0.9em; }
+  nav a.active, nav a:hover { color: white; background: rgba(255,255,255,0.1); }
+  main { max-width: 680px; margin: 32px auto; padding: 0 20px; width: 100%; }
+  .summary { background: white; border-radius: 12px; padding: 20px 24px;
+    margin-bottom: 20px; display: flex; gap: 32px;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.08); }
+  .summary-item .label { font-size: 0.76em; font-weight: 600; color: #888;
+    text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px; }
+  .summary-item .value { font-size: 1.15em; color: #1a1a1a; font-weight: 600; }
+  .summary-item .value.positive { color: #16a34a; }
+  table { width: 100%; background: white; border-radius: 12px; overflow: hidden;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.08); border-collapse: collapse; }
+  th { background: #f8fafc; padding: 12px 16px; text-align: left;
+    font-size: 0.76em; font-weight: 600; color: #888;
+    text-transform: uppercase; letter-spacing: 0.5px; }
+  td { padding: 14px 16px; border-top: 1px solid #f1f5f9;
+    font-size: 0.9em; color: #333; }
+  tr:hover td { background: #f8fafc; }
+  .amount { font-weight: 600; }
+  .amount.credit { color: #16a34a; }
+  .amount.debit  { color: #dc2626; }
+  .status-badge { padding: 2px 10px; border-radius: 12px; font-size: 0.78em;
+    font-weight: 600; }
+  .status-badge.completed { background: #dcfce7; color: #166534; }
+  .gps-badge { background: #f0fdf4; border: 1px solid #86efac; border-radius: 8px;
+    padding: 10px 14px; margin-top: 16px; font-size: 0.78em; color: #166534; }
+</style>
+</head>
+<body>
+<header>
+  <span style="font-size:1.6em"></span>
+  <h1>GPS Demo Bank</h1>
+  <span class="badge">GPS ENABLED</span>
+</header>
+<nav>
+  <a href="/login">Home</a>
+  <a href="/account">Account</a>
+  <a href="/statement" class="active">Statement</a>
+</nav>
+<main>
+  <div class="summary">
+    <div class="summary-item">
+      <div class="label">Current Balance</div>
+      <div class="value" id="current-balance">2500.00 EUR</div>
+    </div>
+    <div class="summary-item">
+      <div class="label">Monthly Income</div>
+      <div class="value positive" id="monthly-income">+1800.00 EUR</div>
+    </div>
+    <div class="summary-item">
+      <div class="label">Monthly Expenses</div>
+      <div class="value" id="monthly-expenses">950.00 EUR</div>
+    </div>
+    <div class="summary-item">
+      <div class="label">Account Holder</div>
+      <div class="value" id="statement-holder">Alice Smith</div>
+    </div>
+  </div>
+  <table>
+    <thead>
+      <tr>
+        <th>Date</th>
+        <th>Description</th>
+        <th>Amount</th>
+        <th>Status</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>2026-03-15</td>
+        <td>Salary — IST Research</td>
+        <td class="amount credit" id="salary">+1800.00 EUR</td>
+        <td><span class="status-badge completed">Completed</span></td>
+      </tr>
+      <tr>
+        <td>2026-03-12</td>
+        <td>Rent Payment</td>
+        <td class="amount debit">-650.00 EUR</td>
+        <td><span class="status-badge completed">Completed</span></td>
+      </tr>
+      <tr>
+        <td>2026-03-10</td>
+        <td>Supermarket Lisboa</td>
+        <td class="amount debit">-87.50 EUR</td>
+        <td><span class="status-badge completed">Completed</span></td>
+      </tr>
+      <tr>
+        <td>2026-03-08</td>
+        <td>NOS Mobile</td>
+        <td class="amount debit">-25.00 EUR</td>
+        <td><span class="status-badge completed">Completed</span></td>
+      </tr>
+      <tr>
+        <td>2026-03-05</td>
+        <td>Transfer from savings</td>
+        <td class="amount credit">+500.00 EUR</td>
+        <td><span class="status-badge completed">Completed</span></td>
+      </tr>
+      <tr>
+        <td>2026-03-01</td>
+        <td>Health Insurance</td>
+        <td class="amount debit">-187.50 EUR</td>
+        <td><span class="status-badge completed">Completed</span></td>
+      </tr>
+    </tbody>
+  </table>
+  <div class="gps-badge">
+ This statement is GPS-signed. Prove your income or balance without revealing full transaction history.
+  </div>
+</main>
+</body>
+</html>

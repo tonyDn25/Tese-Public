@@ -1,0 +1,12 @@
+{
+  "image_id": "7dfc423bd4fe274c1ad6ebef8f3f036da2bdb2a09d741a69a52d448997002907",
+  "proof_time_seconds": 1632.692587786,
+  "receipt": {
+    "domain": "localhost:8443",
+    "field_path": "slideshow.title",
+    "key_id": "gps-nginx",
+    "predicate": "== \"Sample Slide Show\"",
+    "result": true,
+    "timestamp": "1773000454"
+  }
+}

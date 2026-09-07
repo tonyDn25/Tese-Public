@@ -1,0 +1,17 @@
+[package]
+name = "risc0-verifier"
+version = "0.1.0"
+edition = "2021"
+
+# Standalone GPS proof verifier — runs real STARK verification via risc0_zkvm.
+# Does NOT require the "prove" feature (verification only — faster compile, no metal/cuda deps).
+
+[dependencies]
+risc0-zkvm = { version = "3.0.5" }
+methods = { path = "../methods" }
+gps-core = { path = "../gps-core" }
+serde_json = "1"
+anyhow = "1"
+clap = { version = "4", features = ["derive"] }
+bincode = "1"
+base64 = "0.22"

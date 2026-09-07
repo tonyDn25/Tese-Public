@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GPS Demo Bank — Login</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: #f0f4f8; min-height: 100vh; display: flex; flex-direction: column; }
+  header { background: #003580; color: white; padding: 16px 32px;
+    display: flex; align-items: center; gap: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.3); }
+  header h1 { font-size: 1.4em; font-weight: 600; }
+  .badge { background: #22c55e; color: white; font-size: 0.7em;
+    padding: 2px 8px; border-radius: 12px; font-weight: 600; }
+  main { max-width: 420px; margin: 80px auto; padding: 0 20px; width: 100%; }
+  .card { background: white; border-radius: 12px; padding: 32px;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.1); }
+  .card h2 { color: #003580; font-size: 1.3em; margin-bottom: 8px; }
+  .card p { color: #666; font-size: 0.9em; margin-bottom: 24px; }
+  .field { margin-bottom: 16px; }
+  .field label { display: block; font-size: 0.82em; font-weight: 600;
+    color: #555; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.5px; }
+  .field input { width: 100%; padding: 10px 14px; border: 1px solid #ddd;
+    border-radius: 8px; font-size: 1em; outline: none; }
+  .field input:focus { border-color: #003580; }
+  .login-btn { width: 100%; padding: 12px; background: #003580; color: white;
+    border: none; border-radius: 8px; font-size: 1em; font-weight: 600;
+    cursor: pointer; margin-top: 8px; }
+  .login-btn:hover { background: #002460; }
+  .hint { text-align: center; margin-top: 16px; font-size: 0.82em; color: #888; }
+  .gps-badge { background: #f0fdf4; border: 1px solid #86efac; border-radius: 8px;
+    padding: 10px 14px; margin-top: 20px; font-size: 0.78em; color: #166534; }
+</style>
+</head>
+<body>
+<header>
+  <span style="font-size:1.6em"></span>
+  <h1>GPS Demo Bank</h1>
+  <span class="badge">GPS ENABLED</span>
+</header>
+<main>
+  <div class="card">
+    <h2>Sign in</h2>
+    <p>Enter your credentials to access your account</p>
+    <div class="field">
+      <label>Username</label>
+      <input type="text" value="alice.smith" readonly>
+    </div>
+    <div class="field">
+      <label>Password</label>
+      <input type="password" value="••••••••" readonly>
+    </div>
+    <a href="/account" style="text-decoration:none">
+      <button class="login-btn">Sign in →</button>
+    </a>
+    <div class="hint">Demo credentials pre-filled</div>
+    <div class="gps-badge">
+ This page is GPS-signed. Login events can be proven without revealing credentials.
+    </div>
+  </div>
+</main>
+</body>
+</html>

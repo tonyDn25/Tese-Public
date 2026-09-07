@@ -1,0 +1,32 @@
+START Sun Sep  6 01:56:25 AM WEST 2026
+[01:56:25] config 1field : n=10
+[01:58:27]   1field run 1/10 : 122.512063741s (dev_mode=false)
+[02:00:35]   1field run 2/10 : 127.657403393s (dev_mode=false)
+[02:02:43]   1field run 3/10 : 128.036208074s (dev_mode=false)
+[02:04:56]   1field run 4/10 : 132.607545076s (dev_mode=false)
+[02:07:10]   1field run 5/10 : 134.458472808s (dev_mode=false)
+[02:09:26]   1field run 6/10 : 135.688999358s (dev_mode=false)
+[02:11:42]   1field run 7/10 : 136.406723417s (dev_mode=false)
+[02:14:00]   1field run 8/10 : 137.672003781s (dev_mode=false)
+[02:16:18]   1field run 9/10 : 138.24499593s (dev_mode=false)
+[02:18:37]   1field run 10/10 : 138.49239052s (dev_mode=false)
+[02:18:37] config 2field : n=10
+[02:20:56]   2field run 1/10 : 138.900246632s (dev_mode=false)
+[02:23:15]   2field run 2/10 : 139.288932619s (dev_mode=false)
+[02:25:35]   2field run 3/10 : 139.952605984s (dev_mode=false)
+[02:27:56]   2field run 4/10 : 140.628100614s (dev_mode=false)
+[02:30:17]   2field run 5/10 : 140.797984259s (dev_mode=false)
+[02:32:38]   2field run 6/10 : 141.220784055s (dev_mode=false)
+[02:34:59]   2field run 7/10 : 141.057634292s (dev_mode=false)
+[02:37:21]   2field run 8/10 : 141.357472953s (dev_mode=false)
+[02:39:43]   2field run 9/10 : 141.889922934s (dev_mode=false)
+[02:42:05]   2field run 10/10 : 142.288247735s (dev_mode=false)
+[02:42:05] config pdf : n=3
+[02:45:39]   pdf run 1/3 : 214.001974677s (dev_mode=false)
+[02:49:13]   pdf run 2/3 : 214.017227021s (dev_mode=false)
+[02:52:47]   pdf run 3/3 : 214.134026867s (dev_mode=false)
+[02:52:47] config crosspage : n=3
+[03:02:56]   crosspage run 1/3 : 608.736293506s (dev_mode=false)
+[03:13:07]   crosspage run 2/3 : 610.567764564s (dev_mode=false)
+[03:23:20]   crosspage run 3/3 : 612.409569758s (dev_mode=false)
+DONE Sun Sep  6 03:23:20 AM WEST 2026

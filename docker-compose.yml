@@ -1,0 +1,39 @@
+version: '3.8'
+
+services:
+  # -- RETIRED (Path A′, 2026-06-12): legacy 2-component signing path ----------
+  # The `nginx` service (172.18.0.10) ran nginx/lua/sign_response.lua, which signed
+  # only ("@status" "content-digest") — the MF2 legacy base. The guest now rejects
+  # any base lacking @method (full 6-component RFC 9421 only), so this path can no
+  # longer produce a verifiable proof. Unwired here; the nginx/ dir and its Lua are
+  # kept on disk for history (see PRUNING_PATH_A_PRIME.md). To revive for archaeology
+  # only, restore the block below.
+  #
+  # nginx:
+  #   build: { context: ./nginx, dockerfile: Dockerfile }
+  #   container_name: gps-nginx
+  #   ports: ["8443:443"]
+  #   volumes: ["./nginx/keys:/etc/nginx/keys:ro"]
+  #   restart: unless-stopped
+  #   networks: { gps-network: { ipv4_address: 172.18.0.10 } }
+
+  gps-server:
+    build:
+      context: ./gps-server
+      dockerfile: Dockerfile
+    container_name: gps-server
+    ports:
+      - "9443:443"
+    volumes:
+      - ./nginx/keys:/etc/nginx/keys:ro
+    restart: unless-stopped
+    networks:
+      gps-network:
+        ipv4_address: 172.18.0.50
+
+networks:
+  gps-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.18.0.0/16
