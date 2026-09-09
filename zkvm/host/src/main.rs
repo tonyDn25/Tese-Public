@@ -49,6 +49,11 @@ enum Command {
         #[arg(long)] field_session: Vec<String>,
         /// Per-field URL override (parallel to --field; overrides --url for that field)
         #[arg(long)] field_url: Vec<String>,
+        /// Per-field numeric convention for an ordering predicate whose extractor
+        /// does not name one itself (the regex and JSON paths): plain | eu | us.
+        /// Parallel to --field. The anchored number extractor carries its own and
+        /// ignores this.
+        #[arg(long)] number_format: Vec<String>,
         /// Use Bonsai remote prover (requires BONSAI_API_KEY env var)
         #[arg(long)] bonsai: bool,
         #[arg(long)] output: Option<String>,
@@ -83,8 +88,9 @@ enum Command {
 fn main() -> Result<()> {
     let args = Args::parse();
     match args.command {
-        Command::Prove { session, url, field, predicate, field_session, field_url, bonsai, output } =>
-            run_prove_multi(&session, &url, &field, &predicate, &field_session, &field_url, bonsai, output.as_deref()),
+        Command::Prove { session, url, field, predicate, field_session, field_url, number_format, bonsai, output } =>
+            run_prove_multi(&session, &url, &field, &predicate, &field_session, &field_url,
+                            &number_format, bonsai, output.as_deref()),
         Command::NativeMsg => run_native_messaging(),
         Command::Verify { proof } => run_verify(&proof),
         Command::VerifyValue { proof, expect, salt } => run_verify_value(&proof, &expect, &salt),
@@ -131,6 +137,7 @@ fn run_prove_multi(
     predicates: &[String],
     field_sessions: &[String],
     field_urls: &[String],
+    number_formats: &[String],
     bonsai: bool,
     output_path: Option<&str>,
 ) -> Result<()> {
@@ -166,6 +173,9 @@ fn run_prove_multi(
                 .map(|s| s.as_str()).unwrap_or(session_path);
             let furl = field_urls.get(i).filter(|u| !u.is_empty())
                 .map(|s| s.as_str()).unwrap_or(target_url);
+            let nf = number_formats.get(i).filter(|s| !s.is_empty())
+                .map(|s| parse_number_format(s)
+                    .unwrap_or_else(|| panic!("--number-format '{s}': expected plain, eu or us")));
             gps_core::FieldRequest {
                 extractor,
                 predicate: pred.clone(),
@@ -173,6 +183,7 @@ fn run_prove_multi(
                 session_path: sess.to_string(),
                 extracted_value: String::new(),
                 target_url:   furl.to_string(),
+                number_format: nf,
             }
         })
         .collect();
@@ -414,6 +425,18 @@ fn build_output_json(receipt: &ProofReceipt, seal_b64: &str, image_id: &str,
     })
 }
 
+/// Accept the short names a person types for a numeric convention. Deliberately
+/// small: three named readings, and no default, because the whole point of the
+/// 2026-09-09 fix is that an unnamed convention is refused rather than assumed.
+fn parse_number_format(s: &str) -> Option<gps_core::NumberFormat> {
+    match s.trim().to_ascii_lowercase().as_str() {
+        "plain" | "iso"                  => Some(gps_core::NumberFormat::Plain),
+        "eu" | "eugrouped" | "european"  => Some(gps_core::NumberFormat::EuGrouped),
+        "us" | "usgrouped"               => Some(gps_core::NumberFormat::UsGrouped),
+        _ => None,
+    }
+}
+
 fn parse_field_spec(field: &str) -> (Extractor, String) {
     if field.starts_with("regex:") {
         let rest = field.trim_start_matches("regex:");
@@ -474,11 +497,19 @@ fn unescape_literal(inner: &str) -> Option<String> {
 /// Returns None otherwise, so unrecognised patterns keep the general regex path.
 /// Both paths are sound; they differ only in cost.
 fn regex_to_anchored(pattern: &str) -> Option<(String, usize, gps_core::AnchoredKind)> {
-    const META: &str = "\\^$.|?*+()[]{}";
     let p = pattern.strip_prefix("(?s)").unwrap_or(pattern);
     let gap_idx = p.find(".{0,")?;
-    let anchor = &p[..gap_idx];
-    if anchor.is_empty() || anchor.chars().any(|c| META.contains(c)) { return None; }
+    // The anchor is a regex-escaped label, and it has to be unescaped for the same
+    // reason the captured literal does: the anchored extractor finds it by a raw
+    // byte search, so the escaping is not merely unnecessary there, it is what used
+    // to prevent the lowering. Section 6.12 of the dissertation reports that defect
+    // for the captured VALUE and fixes it; the identical fix was never applied to
+    // the anchor, and the coverage corpus could not see it because every label in it
+    // is a plain word. A label carrying punctuation, "Balance (EUR)" or "N.I.F.",
+    // therefore dropped the whole field onto the in-circuit regular expression at
+    // roughly ten times the cycles. Found 2026-09-09 by running the browser flow.
+    let anchor = unescape_literal(&p[..gap_idx])?;
+    let anchor = anchor.as_str();
     let rest = &p[gap_idx + ".{0,".len()..];
     let brace = rest.find('}')?;
     let window: usize = rest[..brace].parse().ok()?;
@@ -510,10 +541,25 @@ fn regex_to_anchored(pattern: &str) -> Option<(String, usize, gps_core::Anchored
         r"[0-9]{2}\.[0-9]{2}\.[0-9]{4}" => Some(gps_core::DateFormat::DmyDot),
         _ => None,
     };
+    // Number patterns name their convention the way date patterns name theirs.
+    // The old catch-all shape `[+-]?[0-9][0-9.,]*` said only "some digits and
+    // separators" and left the guest to guess which convention they were
+    // written in, which is the defect fixed on 2026-09-09. It no longer lowers,
+    // so a stale pattern falls back to the in-circuit regex and the request has
+    // to declare a convention explicitly for an ordering predicate to run at all.
+    let number_kind = match inner {
+        r"[+-]?[0-9]+(\.[0-9]+)?"                       => Some(gps_core::NumberFormat::Plain),
+        r"[+-]?[0-9]{1,3}(\.[0-9]{3})+(,[0-9]+)?"       => Some(gps_core::NumberFormat::EuGrouped),
+        r"[+-]?[0-9]+,[0-9]+"                           => Some(gps_core::NumberFormat::EuGrouped),
+        r"[+-]?[0-9]{1,3}(,[0-9]{3})+(\.[0-9]+)?"       => Some(gps_core::NumberFormat::UsGrouped),
+        _ => None,
+    };
+    // `unescape_literal` rejects a leftover metacharacter, so an anchor that is a
+    // real pattern rather than an escaped label still keeps the regex path.
     let kind = if let Some(f) = date_kind {
         gps_core::AnchoredKind::Date(f)
-    } else if inner == "[0-9][0-9.,]*" || inner == "[+-]?[0-9][0-9.,]*" {
-        gps_core::AnchoredKind::Number
+    } else if let Some(f) = number_kind {
+        gps_core::AnchoredKind::Number(f)
     } else if let Some(lit) = unescape_literal(inner) {
         gps_core::AnchoredKind::Literal(lit)
     } else {
@@ -694,6 +740,8 @@ fn handle_native_request(request: &serde_json::Value) -> serde_json::Value {
                                  .map(url_to_path).unwrap_or_else(|| url.clone());
             let session_path = f.get("session").and_then(|v| v.as_str()).unwrap_or(&path);
             let (extractor, label) = parse_field_spec(field_str);
+            let nf = f.get("number_format").and_then(|v| v.as_str())
+                        .and_then(parse_number_format);
             Some(gps_core::FieldRequest {
                 extractor,
                 predicate:    pred.to_string(),
@@ -701,6 +749,7 @@ fn handle_native_request(request: &serde_json::Value) -> serde_json::Value {
                 extracted_value: String::new(),
                 session_path: session_path.to_string(),
                 target_url:   field_url,
+                number_format: nf,
             })
         }).collect();
         if field_requests.is_empty() {
@@ -733,6 +782,8 @@ fn handle_native_request(request: &serde_json::Value) -> serde_json::Value {
             session_path:    path.clone(),
             target_url:      url.clone(),
             extracted_value: String::new(),
+            number_format:   request.get("number_format").and_then(|v| v.as_str())
+                                .and_then(parse_number_format),
         }]);
         ProofRequest {
             fields: single_fields,
@@ -1251,7 +1302,7 @@ fn analyze_field_with_agent(request: &serde_json::Value) -> serde_json::Value {
 #[cfg(test)]
 mod tests {
     use super::{regex_to_anchored, handle_native_request, url_to_path};
-    use gps_core::{AnchoredKind, DateFormat};
+    use gps_core::{AnchoredKind, DateFormat, NumberFormat};
 
     // -- The browser path (added 2026-09-07) --------------------------------
     //
@@ -1281,7 +1332,7 @@ mod tests {
             "url": url,
             "dev_mode": true,
             // exactly what background.js sends for a single field
-            "field": "regex:Account Balance.{0,300}?([+-]?[0-9][0-9.,]*)|||balance",
+            "field": r"regex:Account Balance.{0,300}?([+-]?[0-9]+(\.[0-9]+)?)|||balance",
             "predicate": "> 1000"
         }))
     }
@@ -1303,7 +1354,7 @@ mod tests {
     fn the_journal_names_the_field_rather_than_echoing_the_pattern() {
         // The extension appends |||<label>; without it parse_field_spec falls back
         // to using the whole regex as the label, and the journal read
-        // `field_label: "Account Balance.{0,300}?([+-]?[0-9][0-9.,]*)"`.
+        // `field_label: "Account Balance.{0,300}?([+-]?[0-9]+(\.[0-9]+)?)"`.
         let r = browser_shaped_prove("https://172.18.0.50/account");
         let label = r["proof"]["journal"]["field_results"][0]["field_label"]
             .as_str().unwrap_or("");
@@ -1370,10 +1421,66 @@ mod tests {
     #[test]
     fn lowers_number_token() {
         let (anchor, window, kind) =
-            regex_to_anchored("Account Balance.{0,300}?([0-9][0-9.,]*)").unwrap();
+            regex_to_anchored(r"Account Balance.{0,300}?([+-]?[0-9]+(\.[0-9]+)?)").unwrap();
         assert_eq!(anchor, "Account Balance");
         assert_eq!(window, 300);
-        assert!(matches!(kind, AnchoredKind::Number));
+        assert!(matches!(kind, AnchoredKind::Number(NumberFormat::Plain)));
+    }
+
+    /// Labels carrying punctuation, found 2026-09-09 by running the browser flow.
+    ///
+    /// The capture layer regex-escapes the label into the anchor, and the lowering
+    /// used to refuse any anchor holding a metacharacter, so every one of these
+    /// dropped the field onto the in-circuit regular expression: measured at
+    /// 10{,}223{,}616 cycles against 1{,}048{,}576 for the anchored path on the same
+    /// field, which is what a 24-minute proof looked like from the browser. This is
+    /// the same defect Section 6.12 reports for the captured VALUE, in the half of
+    /// the rule the fix never reached.
+    #[test]
+    fn a_label_carrying_punctuation_still_lowers() {
+        for label in [r"Balance \(EUR\)", r"N\.I\.F\.", r"Total \(net\)",
+                      r"Balance \[current\]", r"Mr\. Smith's balance", r"Saldo \+ juros"] {
+            let pat = format!(r"{label}.{{0,300}}?([+-]?[0-9]+(\.[0-9]+)?)");
+            let got = regex_to_anchored(&pat);
+            assert!(got.is_some(), "{label} did not lower and would cost ~10x");
+            let (anchor, _, kind) = got.unwrap();
+            assert!(!anchor.contains('\\'), "anchor kept its escaping: {anchor}");
+            assert!(matches!(kind, AnchoredKind::Number(NumberFormat::Plain)));
+        }
+        // The unescaped anchor has to be what the byte scan actually looks for.
+        let (anchor, w, kind) = regex_to_anchored(
+            r"Balance \(EUR\).{0,300}?([+-]?[0-9]+(\.[0-9]+)?)").unwrap();
+        assert_eq!(anchor, "Balance (EUR)");
+        assert_eq!(gps_core::extract_anchored("Balance (EUR): 2500.00", &anchor, w, &kind)
+                   .as_deref(), Some("2500.00"));
+    }
+
+    /// An anchor that is a real pattern rather than an escaped label must still keep
+    /// the regex path, or the lowering would silently change what is matched.
+    #[test]
+    fn an_anchor_that_is_a_real_pattern_does_not_lower() {
+        assert!(regex_to_anchored(r"<div[^>]+>.{0,300}?([+-]?[0-9]+(\.[0-9]+)?)").is_none());
+        assert!(regex_to_anchored(r"Bal.*ance.{0,300}?([+-]?[0-9]+(\.[0-9]+)?)").is_none());
+    }
+
+    #[test]
+    fn each_numeric_convention_lowers_to_its_own_kind() {
+        let (_, _, k) = regex_to_anchored(r"Saldo.{0,300}?([+-]?[0-9]{1,3}(\.[0-9]{3})+(,[0-9]+)?)").unwrap();
+        assert!(matches!(k, AnchoredKind::Number(NumberFormat::EuGrouped)));
+        let (_, _, k) = regex_to_anchored(r"Saldo.{0,300}?([+-]?[0-9]+,[0-9]+)").unwrap();
+        assert!(matches!(k, AnchoredKind::Number(NumberFormat::EuGrouped)));
+        let (_, _, k) = regex_to_anchored(r"Total.{0,300}?([+-]?[0-9]{1,3}(,[0-9]{3})+(\.[0-9]+)?)").unwrap();
+        assert!(matches!(k, AnchoredKind::Number(NumberFormat::UsGrouped)));
+    }
+
+    #[test]
+    fn the_old_convention_free_number_shape_no_longer_lowers() {
+        // `[0-9][0-9.,]*` says "digits and separators" and names no convention,
+        // which is what let the guest guess. It must fall back rather than be
+        // silently assigned a reading.
+        assert!(matches!(regex_to_anchored("Account Balance.{0,300}?([0-9][0-9.,]*)"),
+                         None | Some((_, _, AnchoredKind::Literal(_)))));
+        assert!(regex_to_anchored("Account Balance.{0,300}?([+-]?[0-9][0-9.,]*)").is_none());
     }
 
     #[test]
@@ -1404,7 +1511,7 @@ mod tests {
     #[test]
     fn dotall_prefix_is_accepted() {
         // content.js / the host build patterns with a leading `(?s)` dotall flag.
-        let r = regex_to_anchored("(?s)Saldo.{0,300}?([0-9][0-9.,]*)");
+        let r = regex_to_anchored(r"(?s)Saldo.{0,300}?([+-]?[0-9]+(\.[0-9]+)?)");
         assert!(r.is_some());
     }
 
@@ -1421,17 +1528,18 @@ mod tests {
         // sign-aware Number extractor (KI-19), this lowers to Anchored(Number):
         // the optional sign is captured and kept, so negative values are preserved.
         let (anchor, window, kind) =
-            regex_to_anchored("Balance.{0,300}?([+-]?[0-9][0-9.,]*)").unwrap();
+            regex_to_anchored(r"Balance.{0,300}?([+-]?[0-9]+(\.[0-9]+)?)").unwrap();
         assert_eq!(anchor, "Balance");
         assert_eq!(window, 300);
-        assert!(matches!(kind, AnchoredKind::Number));
+        assert!(matches!(kind, AnchoredKind::Number(NumberFormat::Plain)));
     }
 
     #[test]
     fn unsigned_number_still_lowers() {
-        // The canonical/CLI unsigned token must still lower to the same Number kind.
-        let (_, _, kind) = regex_to_anchored("Saldo.{0,300}?([0-9][0-9.,]*)").unwrap();
-        assert!(matches!(kind, AnchoredKind::Number));
+        // The canonical/CLI token must still lower to a Number kind, now with
+        // the convention named.
+        let (_, _, kind) = regex_to_anchored(r"Saldo.{0,300}?([+-]?[0-9]+(\.[0-9]+)?)").unwrap();
+        assert!(matches!(kind, AnchoredKind::Number(NumberFormat::Plain)));
     }
     // -- Literals with punctuation (added 2026-09-05) -----------------------
     // Every one of these fell back to the in-circuit regex before, purely
@@ -1503,12 +1611,12 @@ mod tests {
     struct Cov { label: &'static str, value: &'static str, pattern: &'static str, want: &'static str }
 
     const CORPUS: &[Cov] = &[
-        Cov{label:"account balance",   value:"2847.50",  pattern:r"Balance.{0,300}?([+-]?[0-9][0-9.,]*)", want:"number"},
-        Cov{label:"balance + currency",value:"2500.00 EUR", pattern:r"Saldo.{0,300}?([+-]?[0-9][0-9.,]*)", want:"number"},
-        Cov{label:"negative balance",  value:"-650.50",  pattern:r"Balance.{0,300}?([+-]?[0-9][0-9.,]*)", want:"number"},
-        Cov{label:"account number",    value:"123456789",pattern:r"Account.{0,300}?([+-]?[0-9][0-9.,]*)", want:"number"},
-        Cov{label:"card last four",    value:"4242",     pattern:r"Card.{0,300}?([+-]?[0-9][0-9.,]*)", want:"number"},
-        Cov{label:"percentage rate",   value:"3.75",     pattern:r"Rate.{0,300}?([+-]?[0-9][0-9.,]*)", want:"number"},
+        Cov{label:"account balance",   value:"2847.50",  pattern:r"Balance.{0,300}?([+-]?[0-9]+(\.[0-9]+)?)", want:"number"},
+        Cov{label:"balance + currency",value:"2500.00 EUR", pattern:r"Saldo.{0,300}?([+-]?[0-9]+(\.[0-9]+)?)", want:"number"},
+        Cov{label:"negative balance",  value:"-650.50",  pattern:r"Balance.{0,300}?([+-]?[0-9]+(\.[0-9]+)?)", want:"number"},
+        Cov{label:"account number",    value:"123456789",pattern:r"Account.{0,300}?([+-]?[0-9]+(\.[0-9]+)?)", want:"number"},
+        Cov{label:"card last four",    value:"4242",     pattern:r"Card.{0,300}?([+-]?[0-9]+(\.[0-9]+)?)", want:"number"},
+        Cov{label:"percentage rate",   value:"3.75",     pattern:r"Rate.{0,300}?([+-]?[0-9]+(\.[0-9]+)?)", want:"number"},
         Cov{label:"holder name",       value:"Alice Smith", pattern:r"Holder.{0,300}?(Alice Smith)", want:"literal"},
         Cov{label:"name with initial", value:"A. Di Nunzio", pattern:r"Holder.{0,300}?(A\. Di Nunzio)", want:"literal"},
         Cov{label:"tax id (NIF)",      value:"500 960 046", pattern:r"NIF.{0,300}?(500 960 046)", want:"literal"},
@@ -1527,7 +1635,7 @@ mod tests {
 
     fn kind_name(k: &AnchoredKind) -> String {
         match k {
-            AnchoredKind::Number      => "number".into(),
+            AnchoredKind::Number(_)   => "number".into(),
             AnchoredKind::Literal(_)  => "literal".into(),
             AnchoredKind::Date(_)     => "date".into(),
         }
@@ -1562,6 +1670,28 @@ mod tests {
         // two further cases lowering to the WRONG kind (European dates bound the
         // day as a number). Do not let it slip back.
         assert_eq!(correct, n, "anchored coverage regressed");
+    }
+
+    /// The numeric twin of the date defect below, found on 2026-09-09.
+    ///
+    /// The old pipeline emitted one convention-free number pattern and the guest
+    /// inferred a reading from whichever separators the value happened to carry.
+    /// A page stating `5.500` was read as five and a half, so `< 1000` was true
+    /// and a valid proof was emitted for a false statement. The value is never
+    /// published, so no verifier could see it. The convention is now part of the
+    /// rule and is committed with it.
+    #[test]
+    fn european_thousands_no_longer_read_as_a_decimal() {
+        let (anchor, window, kind) =
+            regex_to_anchored(r"Saldo.{0,300}?([+-]?[0-9]{1,3}(\.[0-9]{3})+(,[0-9]+)?)").unwrap();
+        let got = gps_core::extract_anchored("Saldo: 5.500 EUR", &anchor, window, &kind).unwrap();
+        assert_eq!(got, "5.500", "the page's own spelling is what gets bound");
+        assert_eq!(gps_core::normalise_number(&got, NumberFormat::EuGrouped).as_deref(),
+                   Some("5500"), "and it reads as five thousand five hundred, not 5.5");
+        // Read under the wrong convention it is refused outright, rather than
+        // being turned into a number a thousand times too small.
+        assert_eq!(gps_core::normalise_number("2.847,50", NumberFormat::Plain), None);
+        assert_eq!(gps_core::normalise_number("1,234.56", NumberFormat::Plain), None);
     }
 
     #[test]
@@ -1627,7 +1757,10 @@ mod tests {
         // --- old regex_to_anchored: no date arm, literals never unescaped ---
         let body = format!("{} {} end", anchor, value);
         if inner == "[0-9][0-9.,]*" || inner == "[+-]?[0-9][0-9.,]*" {
-            (gps_core::extract_anchored(&body, anchor, 300, &AnchoredKind::Number), "number")
+            // The old extractor named no convention. Plain reproduces what it did
+            // to these corpus values, none of which carries a comma.
+            (gps_core::extract_anchored(&body, anchor, 300,
+                &AnchoredKind::Number(NumberFormat::Plain)), "number")
         } else if !inner.chars().any(|c| META.contains(c)) {
             (gps_core::extract_anchored(&body, anchor, 300, &AnchoredKind::Literal(inner)), "literal")
         } else {

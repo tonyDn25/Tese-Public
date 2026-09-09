@@ -131,9 +131,13 @@ fn main() {
             // Reject entries whose validity window has closed. not_after == 0 means
             // "no expiry" (demo/prototype). The response's created timestamp is used as
             // the reference point so the check is deterministic in-circuit.
-            let signing_ts: i64 = extract_created(params_str)
-                .and_then(|s| s.parse().ok())
-                .unwrap_or(0);
+            // `created` is mandatory (see require_created); it used to default to 0
+            // when absent, which made every expiry comparison trivially pass.
+            let signing_ts: i64 = require_created(params_str, &field_req.field_label)
+                .parse()
+                .unwrap_or_else(|_| panic!(
+                    "Field '{}': signature parameter 'created' is not an integer",
+                    field_req.field_label));
             if signed.entry.not_after > 0 && signing_ts > signed.entry.not_after {
                 panic!(
                     "Field '{}': registry entry for '{}' expired (not_after={}, created={})",
@@ -178,12 +182,23 @@ fn main() {
         }
 
         // -- Extract + evaluate --------------------------------------------
-        let timestamp_secs: i64 = extract_created(params_str)
-            .unwrap_or_else(|| target.timestamp.clone())
-            .parse().unwrap_or(0);
+        // The reference clock is the signed `created` parameter and nothing
+        // else. It used to fall back to `target.timestamp`, which the capture
+        // side supplies and no signature covers, so against an origin that
+        // omitted the optional `created` a prover chose the clock an age
+        // predicate was measured against. `require_created` above has already
+        // refused such a page, so this parse cannot reach the fallback.
+        let timestamp_secs: i64 = require_created(params_str, &field_req.field_label)
+            .parse()
+            .unwrap_or_else(|_| panic!(
+                "Field '{}': signature parameter 'created' is not an integer",
+                field_req.field_label));
 
-        let (extracted_str, field_pattern) = extract_field_from(target, field_req, body_salt.as_deref());
-        let result = evaluate_predicate(&extracted_str, &field_req.predicate, timestamp_secs);
+        let (extracted_str, field_pattern, number_format) =
+            extract_field_from(target, field_req, body_salt.as_deref());
+        let result = evaluate_predicate(&extracted_str, &field_req.predicate,
+                                        timestamp_secs, number_format,
+                                        &field_req.field_label);
 
         if !result {
             panic!("Predicate '{}' is FALSE for value '{}' — proof aborted.",
@@ -295,7 +310,8 @@ fn build_full_signature_base(
 // -- Field extraction ----------------------------------------------------------
 
 fn extract_field_from(target: &Transcript, field_req: &gps_core::FieldRequest,
-                      salt: Option<&[u8]>) -> (String, String) {
+                      salt: Option<&[u8]>)
+    -> (String, String, Option<gps_core::NumberFormat>) {
     let raw_body = &target.response.body;
 
     // If body is a PDF, extract text first
@@ -329,7 +345,10 @@ fn extract_field_from(target: &Transcript, field_req: &gps_core::FieldRequest,
             // descriptor, so a verifier can audit how far from the label the value was bound,
             // not only the label and token kind.
             let descriptor = match kind {
-                gps_core::AnchoredKind::Number      => format!("anchored:\"{}\"->number(w={})", anchor, window),
+                // The convention is committed beside the anchor and the window,
+                // for the same reason the date format is: it is part of the rule
+                // that fixes which number the page is taken to state.
+                gps_core::AnchoredKind::Number(f)   => format!("anchored:\"{}\"->number({:?},w={})", anchor, f, window),
                 // The literal is simultaneously the rule and the value, so
                 // publishing the rule publishes the value. Committed instead, under
                 // the same per-proof salt: a verifier who knows what they are
@@ -366,7 +385,16 @@ fn extract_field_from(target: &Transcript, field_req: &gps_core::FieldRequest,
             "Field binding violated: host supplied '{}' but the in-circuit extractor produced '{}' from the signed body",
             field_req.extracted_value, val);
     }
-    (val, descriptor)
+
+    // The anchored Number extractor names its own convention and that one wins,
+    // because it is the rule the value was read under. The other extractors
+    // carry no convention of their own, so the request has to declare one, and
+    // when it does not the ordering predicates below refuse to run.
+    let number_format = match &field_req.extractor {
+        Extractor::Anchored { kind: gps_core::AnchoredKind::Number(f), .. } => Some(*f),
+        _ => field_req.number_format,
+    };
+    (val, descriptor, number_format)
 }
 
 // -- Page finder ---------------------------------------------------------------
@@ -390,43 +418,61 @@ fn find_target_page<'a>(session: &'a Session, target_url: &str) -> Option<&'a Tr
 
 // -- Predicate evaluation ------------------------------------------------------
 
-fn evaluate_predicate(value_str: &str, predicate: &str, timestamp_secs: i64) -> bool {
-    let pred     = predicate.trim();
-    // Handle both European (2.847,50) and standard (2847.50) number formats
-    let normalized_value = if value_str.contains(',') && value_str.contains('.') {
-        // European format: 2.847,50 → remove dots, replace comma with dot
-        value_str.replace('.', "").replace(',', ".")
-    } else if value_str.contains(',') && !value_str.contains('.') {
-        // Simple decimal comma: 86,72 → 86.72
-        value_str.replace(',', ".")
-    } else {
-        value_str.to_string()
+fn evaluate_predicate(value_str: &str, predicate: &str, timestamp_secs: i64,
+                      number_format: Option<gps_core::NumberFormat>,
+                      field_label: &str) -> bool {
+    let pred = predicate.trim();
+
+    // The value's numeric reading, under the convention the rule declares.
+    //
+    // This closed a soundness defect found on 2026-09-09. The guest used to
+    // infer the convention from whichever separators the value happened to
+    // carry: a comma and a dot meant European, a comma alone meant a decimal
+    // comma, and anything else was passed to `f64::from_str` unchanged. Two
+    // ordinary shapes were read as numbers a thousand times smaller than the
+    // page states, `5.500` as 5.5 and `1,234.56` as 1.23456, so a page showing
+    // a balance of 5.500 euro produced a valid STARK proof of `< 1000`. The
+    // value is never published, so nothing in the journal let a verifier see
+    // it. Both cases are now either read correctly or refused.
+    let numeric = |op: &str| -> f64 {
+        let fmt = number_format.unwrap_or_else(|| panic!(
+            "Field '{}': the predicate '{}' orders the value numerically, but the request \
+declares no number format. A reading has to be named rather than guessed, so the proof is refused.",
+            field_label, pred));
+        let n = gps_core::normalise_number(value_str, fmt).unwrap_or_else(|| panic!(
+            "Field '{}': the value '{}' read from the signed body is not a well-formed number \
+in the declared {:?} convention, so '{}' cannot be evaluated over it",
+            field_label, value_str, fmt, op));
+        n.parse::<f64>().unwrap_or_else(|_| panic!(
+            "Field '{}': normalised value '{}' does not parse", field_label, n))
     };
-    let value_f64 = normalized_value.parse::<f64>();
 
     if let Some(r) = pred.strip_prefix(">=") {
         let r: f64 = r.trim().parse().expect("bad number in >=");
-        return value_f64.map(|v| v >= r).unwrap_or(false);
+        return numeric(">=") >= r;
     }
     if let Some(r) = pred.strip_prefix("<=") {
         let r: f64 = r.trim().parse().expect("bad number in <=");
-        return value_f64.map(|v| v <= r).unwrap_or(false);
+        return numeric("<=") <= r;
     }
     if let Some(r) = pred.strip_prefix("> ") {
         let r: f64 = r.trim().parse().expect("bad number in >");
-        return value_f64.map(|v| v > r).unwrap_or(false);
+        return numeric(">") > r;
     }
     if let Some(r) = pred.strip_prefix("< ") {
         let r: f64 = r.trim().parse().expect("bad number in <");
-        return value_f64.map(|v| v < r).unwrap_or(false);
+        return numeric("<") < r;
     }
+    // Equality is a comparison of the bytes the page carries, not of two
+    // numbers. It used to try a numeric comparison first, which brought the
+    // same guessed normalisation into a predicate that does not need it: the
+    // operand a verifier writes is a value, and comparing it to the value the
+    // page states is exactly a string comparison.
     if let Some(r) = pred.strip_prefix("!=") {
         return value_str != r.trim().trim_matches('"');
     }
     if let Some(r) = pred.strip_prefix("==") {
-        let r = r.trim().trim_matches('"');
-        if let (Ok(lv), Ok(rv)) = (value_f64, r.parse::<f64>()) { return lv == rv; }
-        return value_str == r;
+        return value_str == r.trim().trim_matches('"');
     }
     if let Some(r) = pred.strip_prefix("contains") {
         return value_str.contains(r.trim().trim_matches('"'));
@@ -518,6 +564,22 @@ fn extract_keyid(params: &str) -> Option<String> {
 fn extract_created(params: &str) -> Option<String> {
     params.split(';').find(|s| s.trim_start().starts_with("created="))
         .map(|s| s.trim_start().trim_start_matches("created=").to_string())
+}
+
+/// The signed `created` parameter, or an abort.
+///
+/// RFC 9421 makes `created` optional, and GPS does not: every time the guest
+/// needs a clock, that clock has to be one the origin signed. This is the same
+/// kind of profile restriction as accepting exactly one signature base, and it
+/// is stated for the same reason, so that a page the guest accepts can only
+/// carry an authenticated timestamp. `created` sits inside `@signature-params`,
+/// which the signature covers, so requiring it removes the only path by which
+/// an unauthenticated value reached an age computation or an expiry check.
+fn require_created(params: &str, field_label: &str) -> String {
+    extract_created(params).unwrap_or_else(|| panic!(
+        "Field '{}': the signature parameters carry no 'created' timestamp, \
+and GPS requires one because every in-circuit time comparison is measured against it",
+        field_label))
 }
 
 // -- PDF text extraction -------------------------------------------------------

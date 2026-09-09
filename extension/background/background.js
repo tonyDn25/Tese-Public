@@ -99,15 +99,46 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
     const pendingPages = session.pages.filter(p => p._pending_url);
     if (!pendingPages.length) return;
 
-    // Fetch each pending page's body directly, byte-identical to what NGINX signed
+    // Fetch each pending page's body directly, byte-identical to what NGINX signed.
+    //
+    // The body has to be fetched separately because webRequest exposes headers and
+    // not bodies. That second request should carry the same credentials as the
+    // first, or it is not the same resource: on a page behind a session cookie an
+    // uncredentialed refetch returns a sign-in page, the content-digest check fails
+    // against the signed body, and every proof aborts. It was 'omit' until
+    // 2026-09-09, which made capture structurally unable to reach a credentialed
+    // page, the one the motivating scenario is about.
+    //
+    // But 'include' is not universally safe either, and the demo origin proved it
+    // the first time this ran in a browser. An origin that answers with
+    // `Access-Control-Allow-Origin: *` cannot serve a credentialed fetch: a
+    // wildcard cannot say who is allowed to read a response carrying someone's
+    // cookies, so the fetch is rejected before the body arrives. Origins that sign
+    // for machine consumption commonly send exactly that wildcard.
+    //
+    // So try the credentialed fetch, and fall back to the uncredentialed one when
+    // it fails. Both outcomes are recorded on the page and travel into the session,
+    // because which one was used decides what a digest mismatch later means: with
+    // 'omit' on a gated page, a mismatch is this fallback and not tampering.
+    const fetchBody = async (url) => {
+        for (const credentials of ['include', 'omit']) {
+            try {
+                const resp = await fetch(url, { method: 'GET', cache: 'no-store', credentials });
+                if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+                return { resp, credentials };
+            } catch (e) {
+                if (credentials === 'omit') throw e;
+                console.warn(`GPS: credentialed fetch of ${url} failed (${e.message}); `
+                           + `retrying without credentials. A page behind a login will not `
+                           + `capture this way.`);
+            }
+        }
+    };
+
     Promise.all(pendingPages.map(async (page) => {
         const url = page._pending_url;
         try {
-            const resp = await fetch(url, {
-                method: 'GET',
-                cache: 'no-store',
-                credentials: 'omit',
-            });
+            const { resp, credentials } = await fetchBody(url);
             const contentType = page.response.headers['content-type'] || '';
             const isPdf = contentType.includes('pdf') || url.endsWith('.pdf');
             let body;
@@ -123,9 +154,15 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
                 body = await resp.text();
             }
             page.response.body = body;
+            page._fetch_credentials = credentials;
             delete page._pending_url;
         } catch (e) {
-            console.error(`GPS: fetch failed for ${url}:`, e);
+            // Swallowing this is what made the failure invisible: the page kept an
+            // empty body, saveSessionToHost filtered it out, and the session simply
+            // never appeared, with nothing anywhere to say why. Say so instead.
+            console.error(`GPS: could not fetch the body of ${url}: ${e.message}. `
+                        + `This page will NOT be captured.`);
+            page._fetch_error = e.message;
             delete page._pending_url;
         }
     })).then(() => {
@@ -137,7 +174,17 @@ function saveSessionToHost(session, tabId) {
     const completedPages = session.pages.filter(
         p => p.response.body && p.response.headers['signature']
     );
-    if (!completedPages.length) return;
+    if (!completedPages.length) {
+        // Returning quietly here is half of why a failed body fetch was invisible:
+        // the other half is the catch above. A session that captured nothing is
+        // worth saying out loud, with the reason each page was dropped.
+        const why = session.pages.map(p =>
+            `${p.request.path}: ${p._fetch_error ? 'fetch failed, ' + p._fetch_error
+              : !p.response.body ? 'no body' : 'no signature header'}`).join('; ');
+        console.error(`GPS: nothing captured for ${session.domain} `
+                    + `(${session.pages.length} signed response(s) seen). ${why}`);
+        return;
+    }
 
     const sessionToSave = {
         ...session,

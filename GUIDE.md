@@ -6,7 +6,7 @@ revealing nothing else about the page. No trusted hardware, no online third part
 change beyond signing.
 
 - **Source tree:** this folder (the code needed to build, run, and verify GPS end to end).
-- **Guest image identifier:** `71442f7b757c93edf1a14b0535a68b427d80818a156a9eb4ff2c936cfbc2e65b`
+- **Guest image identifier:** `50e385cac9acdd6b9cc3e6c21a19daf33d6d817cad32d5fe7fe17d2728eddcd0`
   (the SHA-256 of the compiled zkVM guest; trusting a proof means trusting this exact program).
 - **One-shot reproduction:** [`./reproduce.sh`](#7-running-testing-validating), see §7.
 
@@ -64,7 +64,7 @@ verified body and binds the proven value to it; (4) evaluates the **predicate** 
 | **zkVM / guest** | RISC Zero zero-knowledge virtual machine running RISC-V RV32IM. The **guest** is the Rust program executed inside it; it performs every security check. |
 | **host** | The Rust program on the user's machine (`gps-host`) that assembles the proof request and drives the prover. **Not** trusted for soundness. |
 | **origin** | The web server that signs responses (RFC 9421). |
-| **image identifier (`image_id`)** | SHA-256 of the compiled guest ELF. Accepting a proof for an `image_id` means accepting *that exact program and its constants* (including the pinned root key). Ours: `71442f7b…`. |
+| **image identifier (`image_id`)** | SHA-256 of the compiled guest ELF. Accepting a proof for an `image_id` means accepting *that exact program and its constants* (including the pinned root key). Ours: `50e385ca…`. |
 | **journal** | The public output the guest commits; a verifier learns only this (predicates, results, patterns, body hash, source URL, session, trust anchor, **not** the body, and for inequalities not the value). |
 | **seal** | The STARK proof a verifier checks against the `image_id`. ~525 KB here. |
 | **predicate** | The claim checked over the extracted value: `> 1000`, `== "Alice Smith"`, `contains(...)`, `age >= N`, etc. A false predicate aborts the proof. |
@@ -87,13 +87,13 @@ verified body and binds the proven value to it; (4) evaluates the **predicate** 
 | `zkvm/host/` | `gps-host`: `prove`, `verify`, `native-msg`, `verify-serve`. |
 | `zkvm/risc0-verifier/` | Standalone reference verifier crate. |
 | `verifier.html` | Browser proof **inspector**; does *real* STARK verification when `verify-serve` is running, else a clearly-labelled journal-only view. |
-| `proofs/` | The four real proofs (`dev_mode:false`, `71442f7b…`). |
+| `proofs/` | The four real proofs (`dev_mode:false`, `50e385ca…`). |
 | `reproduce.sh` | The reproduction harness (this guide's companion). |
 | `launch.sh`, `generate_keys.sh` | Bring up the demo stack / regenerate the leaf key. |
-| `nginx/keys/` | **Throwaway demo keys, committed on purpose.** The root's public half is compiled into the guest, so it is part of `image_id 71442f7b…` and cannot be rotated without invalidating every shipped proof. Because its private half is public, anyone can mint a registry entry under this identifier: fine for a demo, never for a deployment. See README. |
+| `nginx/keys/` | **Throwaway demo keys, committed on purpose.** The root's public half is compiled into the guest, so it is part of `image_id 50e385ca…` and cannot be rotated without invalidating every shipped proof. Because its private half is public, anyone can mint a registry entry under this identifier: fine for a demo, never for a deployment. See README. |
 
 ## 5. Trust model
-**Proven** (a verifier accepting a proof for `image_id` 71442f7b is assured of):
+**Proven** (a verifier accepting a proof for `image_id` 50e385ca is assured of):
 1. the response was served under a leaf key the pinned **root** vouched for in a registry entry whose authority matches the page;
 2. the body was not altered after signing (digest re-checked in-circuit);
 3. each field's value is the **first match of its named pattern** in that signed body (bound in-circuit);
@@ -154,7 +154,7 @@ Everything is driven by **`./reproduce.sh <command>`** (run `./reproduce.sh` wit
 | Command | What it does / validates | Time |
 |---------|--------------------------|------|
 | `env` | Check prerequisites and print tool versions. | secs |
-| `build` | Build the zkVM (guest built reproducibly in Docker, see §10); print the guest `image_id` and assert it equals `71442f7b…` (proves the source in this tree reproduces the shipped artifacts and the dissertation, Appendix A). | ~3 min |
+| `build` | Build the zkVM (guest built reproducibly in Docker, see §10); print the guest `image_id` and assert it equals `50e385ca…` (proves the source in this tree reproduces the shipped artifacts and the dissertation, Appendix A). | ~3 min |
 | `verify` | Verify the four shipped proofs with `gps-host verify` + `risc0-verifier`, timed (Table 6.7). | secs |
 | `soundness` | Run the 13-case adversarial suite (9 attack classes A–I) against the real guest (Table 6.2). | ~3 min |
 | `cycles` | Reproduce Table 6.4 by user-cycle differencing. Temporarily instruments host+guest, builds variants, measures, and **restores the source** (exit trap). | ~10 min |
@@ -242,7 +242,7 @@ launch.sh avoids them, see the §9 note below.)
 GPS_KEY_REGISTRY=$PWD/nginx/keys/gps-keys.json bin/gps-host verify --proof ~/Downloads/proof.json
 ```
 or open `verifier.html` and drop the file in. A browser-captured proof carries the same
-`image_id` (`71442f7b`), `binding:"in-circuit"`, `dev_mode:false`, and the `field_selected` rule.
+`image_id` (`50e385ca`), `binding:"in-circuit"`, `dev_mode:false`, and the `field_selected` rule.
 
 **Other fields/pages to try** (the demo index is `https://172.18.0.50/`):
 | Page | Field to click | Example predicate | Proves |
@@ -290,11 +290,11 @@ cd gps   # this folder
 ```
 **Reproducible image_id (Docker).** The guest is built inside the pinned
 `risczero/risc0-guest-builder` image, so `reproduce.sh build` yields the **same** `image_id`
-(`71442f7b…`) on any machine. This needs Docker with **BuildKit**. If `docker buildx version`
+(`50e385ca…`) on any machine. This needs Docker with **BuildKit**. If `docker buildx version`
 fails, install the buildx plugin (e.g. `pacman -S docker-buildx`, or drop the release binary in
 `~/.docker/cli-plugins/docker-buildx`) and the build runs with `DOCKER_BUILDKIT=1`. To skip Docker
 and build locally instead, set `RISC0_SKIP_DOCKER=1`: the build still works but its `image_id`
-is environment-specific and will **not** equal `71442f7b…` (so the shipped proofs are then verified
+is environment-specific and will **not** equal `50e385ca…` (so the shipped proofs are then verified
 with the prebuilt `bin/gps-host`, and proofs you generate are verified with your own build).
 
 The first `cargo build` pulls RISC Zero and takes longer (it compiles memory-heavy C++ prover
@@ -311,7 +311,7 @@ reproduced here, table by table:
 - **Table 6.3, proving cost:** `./reproduce.sh proofs` / `timing` (§7).
 - **Table 6.7, verification:** `./reproduce.sh verify` (§7).
 
-The artifact `image_id` (`71442f7b…`, dissertation Appendix A) is asserted by `./reproduce.sh build`,
+The artifact `image_id` (`50e385ca…`, dissertation Appendix A) is asserted by `./reproduce.sh build`,
 which proves the source in this tree reproduces the shipped artifacts.
 
 ## 12. File map
@@ -321,7 +321,7 @@ GUIDE.md                ← this file
 launch.sh               ← bring up demo server + install native host
 generate_keys.sh        ← regenerate the leaf signing key
 docker-compose.yml      ← gps-server service
-proofs/                 ← proof_1field/2field/pdf_nif/multipage.json (real, 71442f7b)
+proofs/                 ← proof_1field/2field/pdf_nif/multipage.json (real, 50e385ca)
 benchmarks/             ← run_measurements.sh (n=10 campaign) + measurement notes
 tests/adversarial/      ← run_suite.sh (13-case soundness) + RESULTS.md
 bin/                    ← prebuilt gps-host (+ attack-sim build used by the suite)
@@ -334,4 +334,4 @@ verifier.html           ← browser proof inspector (real verify via verify-serv
 ```
 
 ---
-*Authoritative state: this tree. Guest `image_id`: `71442f7b…`.*
+*Authoritative state: this tree. Guest `image_id`: `50e385ca…`.*

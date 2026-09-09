@@ -50,6 +50,77 @@
   // Converts a raw value string into the most appropriate regex capture group.
   // This is the core of robustness, the pattern must match in the signed body.
 
+  // -- Numeric convention ----------------------------------------------------
+  // A number pattern names the convention its value is written in, exactly as a
+  // date pattern names its format. Emitting one convention-free shape was the
+  // 2026-09-09 defect: the guest was left to infer a reading from whichever
+  // separators appeared, and read "5.500" as five and a half, so a page stating
+  // a balance of 5.500 could prove "< 1000".
+  //
+  // Each branch below produces the pattern the host lowers to exactly one
+  // NumberFormat, and the guest commits that name to the journal, so the reading
+  // a proof used is on the record instead of being guessed at both ends.
+  const NUM_PLAIN = '([+-]?[0-9]+(\\.[0-9]+)?)';
+  const NUM_EU    = '([+-]?[0-9]{1,3}(\\.[0-9]{3})+(,[0-9]+)?)';
+  const NUM_EU_DEC= '([+-]?[0-9]+,[0-9]+)';
+  const NUM_US    = '([+-]?[0-9]{1,3}(,[0-9]{3})+(\\.[0-9]+)?)';
+
+  // Locales that write thousands with a dot and decimals with a comma. Consulted
+  // ONLY for the one string shape that is genuinely ambiguous (see below), and
+  // the outcome is committed to the journal either way.
+  const EU_DECIMAL_LANGS = /^(pt|es|de|it|nl|da|fi|sv|nb|no|is|tr|id|vi|ro|el|pl|cs|sk|sl|hr|sr|bg|ru|uk|lt|lv|et|hu|ca|gl|eu|af)\b/i;
+
+  function pageWritesDecimalsWithComma() {
+    const lang = (document.documentElement.getAttribute('lang') || navigator.language || '').trim();
+    return EU_DECIMAL_LANGS.test(lang);
+  }
+
+  function numberPattern(valueText) {
+    // Strip a trailing currency word and any sign, leaving the digits and
+    // separators that decide the convention.
+    const core = valueText.trim().replace(/\s*[A-Za-z€$£]{0,3}\s*$/, '').replace(/^[+-]/, '');
+    const lastDot   = core.lastIndexOf('.');
+    const lastComma = core.lastIndexOf(',');
+
+    // Both separators present: the LAST one is the decimal point, which settles
+    // the convention with no guessing at all.
+    if (lastDot >= 0 && lastComma >= 0) {
+      return lastComma > lastDot ? NUM_EU : NUM_US;
+    }
+    // Commas only: a run of three-digit groups is US thousands, anything else is
+    // a decimal comma.
+    if (lastComma >= 0) {
+      return /^[0-9]{1,3}(,[0-9]{3})+$/.test(core) ? NUM_US : NUM_EU_DEC;
+    }
+    // Dots only.
+    if (lastDot >= 0) {
+      // Two or more dots can only be thousands grouping; a single decimal point
+      // cannot appear twice.
+      if ((core.match(/\./g) || []).length > 1) return NUM_EU;
+      // Exactly one dot with one to three digits before it and exactly three
+      // after is the one shape both conventions accept: 5.500 is 5.5 under a
+      // plain reading and 5500 under a European one, and the digits alone cannot
+      // decide. The page's declared language is the only evidence available, it
+      // is a heuristic and it is recorded as one; whichever way it falls, the
+      // convention is named in the rule and committed to the journal, so the
+      // reading is auditable rather than silent.
+      if (/^[0-9]{1,3}\.[0-9]{3}$/.test(core)) {
+        return pageWritesDecimalsWithComma() ? NUM_EU : NUM_PLAIN;
+      }
+      return NUM_PLAIN;
+    }
+    return NUM_PLAIN;
+  }
+
+  // The convention a pattern names, for display in the popup so the user sees
+  // the reading before paying for a proof.
+  function patternNumberFormat(pattern) {
+    if (pattern === NUM_EU || pattern === NUM_EU_DEC) return 'EuGrouped';
+    if (pattern === NUM_US) return 'UsGrouped';
+    if (pattern === NUM_PLAIN) return 'Plain';
+    return null;
+  }
+
   function valueToPattern(valueText) {
     const v = valueText.trim();
 
@@ -86,13 +157,13 @@
     if (v.match(/[0-9]/)) {
       // Number with optional currency suffix (2500.00 EUR, +1800.00 EUR) → numeric
       if (v.match(/^[+-]?[0-9][0-9.,]*\s*[A-Za-z]{0,3}$/)) {
-        return '([+-]?[0-9][0-9.,]*)';
+        return numberPattern(v);
       }
       // Mixed alphanumeric (IBAN, codes) → exact match
       if (v.match(/[a-zA-Z]/) || v.match(/[0-9]\s+[0-9]/)) {
         return `(${escapeRegex(v.slice(0, 80))})`;
       }
-      return '([+-]?[0-9][0-9.,]*)';
+      return numberPattern(v);
     }
 
   // Pure text, exact escaped match

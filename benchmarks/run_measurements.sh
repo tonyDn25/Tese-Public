@@ -32,10 +32,10 @@ PROG="$REPO/benchmarks/progress.log"; : > "$PROG"
 SESS1="$TR/session_direct_172_18_0_50_4502b208.json"
 SESSP="$TR/session_pdf_e0c3c3c9.json"
 SESSM="$TR/session_multipage_82a6a7bf.json"
-BAL='regex:Account Balance.{0,300}?([+-]?[0-9][0-9.,]*)|||balance'
+BAL='regex:Account Balance.{0,300}?([+-]?[0-9]+(\.[0-9]+)?)|||balance'
 HOLD='regex:Account Holder.{0,300}?(Alice Smith)|||holder'
 NIF='regex:Contribuinte sob o n .{0,20}?(500 960 046)|||nif'
-MB1='regex:id="balance">.{0,20}?([0-9][0-9.,]*)|||balance'
+MB1='regex:id="balance">.{0,20}?([+-]?[0-9]+(\.[0-9]+)?)|||balance'
 MW2='regex:Caixadirecta, .{0,50}?(António Silva)|||welcome_name'
 
 # run_config <logname> <n> -- <prove args...>
@@ -97,9 +97,9 @@ for key,desc in cfgs:
         rows.append(f"| {desc} | 0 |, |, |, |, |")
 out=os.path.join(repo,"benchmarks","n10_measurements.md")
 with open(out,"w") as f:
-    f.write("# CPU-pinned real-STARK measurements (v12 guest, image_id 71442f7b...)\n\n")
+    f.write("# CPU-pinned real-STARK measurements (v13 guest, image_id 50e385ca...)\n\n")
     f.write(f"Generated {datetime.datetime.utcnow():%Y-%m-%d %H:%M UTC} by `benchmarks/run_measurements.sh`.\n\n")
-    f.write("- **Guest:** v12, image_id `71442f7b…` (`bin/gps-host`).\n")
+    f.write("- **Guest:** v13, image_id `50e385ca…` (`bin/gps-host`).\n")
     f.write(f"- **Real STARK proofs** (`dev_mode=false`), each pinned with `taskset -c {os.environ.get('CORES','0-15')}`,\n")
     f.write("  `GPS_SEGMENT_PO2=19` (matches the canonical proofs; bounds peak RAM ~6.9 GB).\n")
     f.write(f"- Machine: 16-core CPU, 16 GB, shared with the live desktop session. Key configs n={nkey}; PDF/cross-page n={naux}.\n")

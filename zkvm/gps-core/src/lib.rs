@@ -64,8 +64,19 @@ pub enum Extractor {
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub enum AnchoredKind {
-    /// The first `[0-9][0-9.,]*` token after the anchor.
-    Number,
+    /// The first number after the anchor, written in the stated convention and
+    /// normalised to a plain decimal string.
+    ///
+    /// The convention is part of the rule for the same reason the date format
+    /// is. `5.500` is five and a half under `Plain` and five thousand five
+    /// hundred under `EuGrouped`, and the digits alone cannot decide which the
+    /// page meant. Until 2026-09-09 the guest guessed, by looking at which
+    /// separators happened to be present, and the guess was silent: a page
+    /// reading `5.500` was normalised to `5.5`, so `< 1000` evaluated true and
+    /// a valid proof was emitted for a statement that is false about the page.
+    /// Naming the convention and committing it makes the reading auditable
+    /// instead of guessed. See `normalise_number`.
+    Number(NumberFormat),
     /// A specific literal that must occur after the anchor (binds e.g. a name
     /// to its label). The value is the literal itself.
     Literal(String),
@@ -117,6 +128,146 @@ impl DateFormat {
     fn day_first(self) -> bool {
         !matches!(self, DateFormat::Iso | DateFormat::IsoSlash | DateFormat::MdySlash)
     }
+}
+
+/// The numeric conventions the extractor recognises. Each names one reading of
+/// a digit string; the extractor never guesses between them, and the chosen one
+/// is committed to the journal so a verifier can see which was applied.
+#[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq)]
+pub enum NumberFormat {
+    /// No grouping separators. A single `.` is the decimal point: `2500.00`,
+    /// `42`, `-650.5`. A comma anywhere makes the value non-conforming.
+    Plain,
+    /// `.` groups thousands in runs of exactly three, `,` is the decimal point:
+    /// `2.847,50`, `5.500`, `1.234.567,89`, and ungrouped `86,72`.
+    EuGrouped,
+    /// `,` groups thousands in runs of exactly three, `.` is the decimal point:
+    /// `1,234.56`, `5,500`, `1,234,567.89`.
+    UsGrouped,
+}
+
+impl NumberFormat {
+    /// (grouping separator, decimal separator).
+    fn separators(self) -> (Option<u8>, u8) {
+        match self {
+            NumberFormat::Plain     => (None,       b'.'),
+            NumberFormat::EuGrouped => (Some(b'.'), b','),
+            NumberFormat::UsGrouped => (Some(b','), b'.'),
+        }
+    }
+}
+
+/// Read `s` as a number written in `fmt` and return it as a plain decimal
+/// string (`-1234.56`), or `None` if it does not conform to that convention.
+///
+/// Conformance is checked rather than repaired. A value carrying a separator
+/// the convention does not use, or a thousands group that is not exactly three
+/// digits, is refused, so a page written in one convention cannot be silently
+/// read in another. That refusal is what closes the misread: `2.847,50` under
+/// `Plain` and `1,234.56` under `Plain` both return `None` and abort the proof
+/// instead of parsing to `2.847` and `1.23456`.
+///
+/// The residual ambiguity is inherent and is handled the way the date formats
+/// handle theirs. `5.500` conforms to both `Plain` (5.5) and `EuGrouped`
+/// (5500); the prover names one, the journal carries the name, and a verifier
+/// who knows the origin's locale can reject a proof whose declared convention
+/// contradicts it.
+pub fn normalise_number(s: &str, fmt: NumberFormat) -> Option<String> {
+    let (group, decimal) = fmt.separators();
+    let b = s.as_bytes();
+    let mut i = 0usize;
+    let mut out = String::with_capacity(s.len());
+    if i < b.len() && (b[i] == b'+' || b[i] == b'-') {
+        if b[i] == b'-' { out.push('-'); }
+        i += 1;
+    }
+    // Integer part: one group of 1 to 3 digits when grouped, then runs of
+    // exactly 3; any number of digits when ungrouped.
+    let int_start = i;
+    while i < b.len() && b[i].is_ascii_digit() { i += 1; }
+    let first_run = i - int_start;
+    if first_run == 0 { return None; }
+    let mut grouped = false;
+    if let Some(g) = group {
+        if i < b.len() && b[i] == g {
+            // Grouping is in use, so the leading run must be 1 to 3 digits and
+            // every later run exactly 3.
+            if first_run > 3 { return None; }
+            grouped = true;
+            while i < b.len() && b[i] == g {
+                i += 1;
+                let run_start = i;
+                while i < b.len() && b[i].is_ascii_digit() { i += 1; }
+                if i - run_start != 3 { return None; }
+            }
+        }
+    }
+    let _ = grouped;
+    for &c in &b[int_start..i] {
+        if c.is_ascii_digit() { out.push(c as char); }
+    }
+    // Optional fractional part.
+    if i < b.len() && b[i] == decimal {
+        i += 1;
+        let frac_start = i;
+        while i < b.len() && b[i].is_ascii_digit() { i += 1; }
+        if i == frac_start { return None; }
+        out.push('.');
+        for &c in &b[frac_start..i] { out.push(c as char); }
+    }
+    // Nothing may follow. A trailing separator or a stray digit run means the
+    // string is not a well-formed number in this convention.
+    if i != b.len() { return None; }
+    Some(out)
+}
+
+/// The longest prefix of `region` starting at `p` that is a well-formed number
+/// in `fmt`, as it appears in the body. Returns the raw slice length, so the
+/// caller can keep the page's own spelling for the value and normalise
+/// separately.
+fn number_at(region: &[u8], p: usize, fmt: NumberFormat) -> Option<usize> {
+    let (group, decimal) = fmt.separators();
+    let mut i = p;
+    if i < region.len() && (region[i] == b'+' || region[i] == b'-') { i += 1; }
+    let int_start = i;
+    while i < region.len() && region[i].is_ascii_digit() { i += 1; }
+    if i == int_start { return None; }
+    if let Some(g) = group {
+        // Only consume a group separator when exactly three digits follow it,
+        // so a sentence like "5.500 and 3 more" does not swallow the wrong run
+        // and a full stop ending a sentence is never mistaken for a separator.
+        while i + 3 < region.len()
+            && region[i] == g
+            && region[i + 1].is_ascii_digit()
+            && region[i + 2].is_ascii_digit()
+            && region[i + 3].is_ascii_digit()
+            && !region.get(i + 4).is_some_and(|c| c.is_ascii_digit())
+        {
+            i += 4;
+        }
+    }
+    if i + 1 < region.len() && region[i] == decimal && region[i + 1].is_ascii_digit() {
+        i += 1;
+        while i < region.len() && region[i].is_ascii_digit() { i += 1; }
+    }
+    // A match has to be the whole number, not a piece cut out of one written in
+    // some other convention. Without these three guards a US-formatted
+    // `1,234.56` read under `Plain` yields the token `1`, and a proof that the
+    // first plain number after the label is under five: true of the token,
+    // false of the page, and committed as `number(Plain,...)` where nothing
+    // signals the truncation. Refusing the match aborts instead, which is the
+    // outcome a convention mismatch should have.
+    let sep = |b: u8| b == b'.' || b == b',';
+    // A digit immediately before the match means this is the tail of a longer run.
+    if p > 0 && region[p - 1].is_ascii_digit() { return None; }
+    // A separator immediately before it, with a digit before that, means the
+    // match starts in the middle of a separated number.
+    if p >= 2 && sep(region[p - 1]) && region[p - 2].is_ascii_digit() { return None; }
+    // A separator immediately after it, followed by a digit, means the number
+    // continues in a way this convention does not accept.
+    if region.get(i).is_some_and(|&b| sep(b))
+        && region.get(i + 1).is_some_and(|b| b.is_ascii_digit()) { return None; }
+    Some(i - p)
 }
 
 /// Parse `n` ASCII digits at `p`, returning the value and the next index.
@@ -209,31 +360,30 @@ pub fn extract_anchored(body: &str, anchor: &str, window: usize, kind: &Anchored
     let rend = core::cmp::min(rstart.saturating_add(window), bytes.len());
     let region = &bytes[rstart..rend];
     match kind {
-        AnchoredKind::Number => {
-            // Match `[+-]?[0-9][0-9.,]*` at the earliest position (lazy-gap
-            // semantics): scan left to right for the first index that begins a
-            // number, either a digit, or a single '+'/'-' immediately before a
-            // digit. The sign, when present, is included in the value so that
-            // negative quantities (e.g. an overdrawn balance) are preserved.
+        AnchoredKind::Number(fmt) => {
+            // Same lazy-gap semantics as before: the earliest position in the
+            // window that begins a well-formed number in the stated convention
+            // wins. The convention now decides where the token ends, so a
+            // European `2.847,50` and a plain `2847.50` are read as the values
+            // their own conventions give them rather than by whichever
+            // separators happen to appear. The sign is kept, so an overdrawn
+            // balance keeps its minus.
             let n = region.len();
-            let mut i = 0usize;
-            let start = loop {
-                if i >= n { return None; }
+            let start = (0..n).find(|&i| {
                 let b = region[i];
-                if b.is_ascii_digit() { break i; }
-                if (b == b'+' || b == b'-') && i + 1 < n && region[i + 1].is_ascii_digit() {
-                    break i;
-                }
-                i += 1;
-            };
-            // `start` is a digit, or a sign whose next byte is a digit.
-            let digit_start = if region[start] == b'+' || region[start] == b'-' { start + 1 } else { start };
-            let mut end = digit_start;
-            while end < n
-                && (region[end].is_ascii_digit() || region[end] == b'.' || region[end] == b',') {
-                end += 1;
-            }
-            core::str::from_utf8(&region[start..end]).ok().map(|s| s.to_string())
+                b.is_ascii_digit()
+                    || ((b == b'+' || b == b'-') && i + 1 < n && region[i + 1].is_ascii_digit())
+            })?;
+            // The FIRST number after the label decides, and if it does not
+            // conform to the declared convention the extraction fails rather
+            // than scanning on. Sliding to a later number would quietly answer a
+            // different question: on a page whose balance reads `1,234.56`, a
+            // rule declaring `Plain` would skip it and bind whatever number came
+            // next in the window, which is a value the user never pointed at.
+            // A convention that cannot read the value it was aimed at is a wrong
+            // declaration, and the honest response to it is to refuse.
+            let len = number_at(region, start, *fmt)?;
+            core::str::from_utf8(&region[start..start + len]).ok().map(|s| s.to_string())
         }
         AnchoredKind::Literal(lit) => {
             find_subslice(region, lit.as_bytes()).map(|_| lit.clone())
@@ -467,6 +617,15 @@ pub struct FieldRequest {
     /// Pre-extracted value (set by host to avoid regex in guest)
     #[serde(default)]
     pub extracted_value: String,
+    /// The numeric convention to read this field's value in, for the extractors
+    /// that do not carry one themselves (`Regex`, `JsonPath`). The anchored
+    /// `Number` extractor names its own and that one wins.
+    ///
+    /// `None` is not a default reading, it is the absence of one: an ordering
+    /// predicate on a field with no declared convention aborts rather than
+    /// guessing. Equality is a string comparison and needs no convention.
+    #[serde(default)]
+    pub number_format: Option<NumberFormat>,
 }
 
 /// A single proven field result in the journal
@@ -538,6 +697,7 @@ impl ProofRequest {
                 session_path:    String::new(),
                 target_url:      self.target_url.clone(),
                 extracted_value: String::new(),
+                number_format:   None,
             }]
         }
     }
@@ -581,24 +741,24 @@ pub struct ProofReceipt {
 
 #[cfg(test)]
 mod tests {
-    use super::{extract_anchored, AnchoredKind, DateFormat};
+    use super::{extract_anchored, normalise_number, AnchoredKind, DateFormat, NumberFormat};
 
     #[test]
     fn anchored_number_unsigned() {
-        let v = extract_anchored("Balance: 2500.00 EUR", "Balance:", 50, &AnchoredKind::Number);
+        let v = extract_anchored("Balance: 2500.00 EUR", "Balance:", 50, &AnchoredKind::Number(NumberFormat::Plain));
         assert_eq!(v.as_deref(), Some("2500.00"));
     }
 
     #[test]
     fn anchored_number_negative_sign_preserved() {
         // The whole point of KI-19: an overdrawn balance keeps its '-'.
-        let v = extract_anchored("Balance: -650.50 EUR", "Balance:", 50, &AnchoredKind::Number);
+        let v = extract_anchored("Balance: -650.50 EUR", "Balance:", 50, &AnchoredKind::Number(NumberFormat::Plain));
         assert_eq!(v.as_deref(), Some("-650.50"));
     }
 
     #[test]
     fn anchored_number_positive_sign_preserved() {
-        let v = extract_anchored("Delta: +1800.00", "Delta:", 50, &AnchoredKind::Number);
+        let v = extract_anchored("Delta: +1800.00", "Delta:", 50, &AnchoredKind::Number(NumberFormat::Plain));
         assert_eq!(v.as_deref(), Some("+1800.00"));
     }
 
@@ -606,7 +766,7 @@ mod tests {
     fn anchored_number_lone_sign_is_not_consumed() {
         // A '-' not immediately before a digit must not start the match; the
         // scan continues to the next real number.
-        let v = extract_anchored("rate - then 42 pct", "rate", 30, &AnchoredKind::Number);
+        let v = extract_anchored("rate - then 42 pct", "rate", 30, &AnchoredKind::Number(NumberFormat::Plain));
         assert_eq!(v.as_deref(), Some("42"));
     }
 
@@ -619,7 +779,100 @@ mod tests {
 
     #[test]
     fn anchored_number_absent_is_none() {
-        assert!(extract_anchored("no numbers here", "no", 20, &AnchoredKind::Number).is_none());
+        assert!(extract_anchored("no numbers here", "no", 20, &AnchoredKind::Number(NumberFormat::Plain)).is_none());
+    }
+
+    // -- Numeric conventions (2026-09-09) ----------------------------------
+    //
+    // The guest used to infer the convention from whichever separators the
+    // value happened to carry, which silently misread two shapes. These pin
+    // both the readings and the refusals.
+
+    #[test]
+    fn a_plain_number_reads_its_dot_as_a_decimal_point() {
+        assert_eq!(normalise_number("2500.00", NumberFormat::Plain).as_deref(), Some("2500.00"));
+        assert_eq!(normalise_number("42", NumberFormat::Plain).as_deref(), Some("42"));
+        assert_eq!(normalise_number("-650.5", NumberFormat::Plain).as_deref(), Some("-650.5"));
+    }
+
+    #[test]
+    fn a_european_number_reads_its_dot_as_a_thousands_separator() {
+        // The case that produced a false proof: 5.500 is five thousand five
+        // hundred here, not five and a half.
+        assert_eq!(normalise_number("5.500", NumberFormat::EuGrouped).as_deref(), Some("5500"));
+        assert_eq!(normalise_number("2.847,50", NumberFormat::EuGrouped).as_deref(), Some("2847.50"));
+        assert_eq!(normalise_number("1.234.567,89", NumberFormat::EuGrouped).as_deref(), Some("1234567.89"));
+        assert_eq!(normalise_number("86,72", NumberFormat::EuGrouped).as_deref(), Some("86.72"));
+        assert_eq!(normalise_number("-2.847,50", NumberFormat::EuGrouped).as_deref(), Some("-2847.50"));
+    }
+
+    #[test]
+    fn a_us_grouped_number_reads_its_comma_as_a_thousands_separator() {
+        assert_eq!(normalise_number("1,234.56", NumberFormat::UsGrouped).as_deref(), Some("1234.56"));
+        assert_eq!(normalise_number("1,000,000.00", NumberFormat::UsGrouped).as_deref(), Some("1000000.00"));
+        assert_eq!(normalise_number("5,500", NumberFormat::UsGrouped).as_deref(), Some("5500"));
+    }
+
+    #[test]
+    fn a_value_from_another_convention_is_refused_rather_than_misread() {
+        // Both of these produced valid proofs of false statements before the
+        // convention became part of the rule: 2.847,50 parsed as 2.847 and
+        // 1,234.56 as 1.23456.
+        assert!(normalise_number("2.847,50", NumberFormat::Plain).is_none());
+        assert!(normalise_number("1,234.56", NumberFormat::Plain).is_none());
+        assert!(normalise_number("2500.00", NumberFormat::EuGrouped).is_none());
+        assert!(normalise_number("1,234.56", NumberFormat::EuGrouped).is_none());
+    }
+
+    #[test]
+    fn a_thousands_group_that_is_not_three_digits_is_refused() {
+        assert!(normalise_number("5.50", NumberFormat::EuGrouped).is_none());
+        assert!(normalise_number("5.5000", NumberFormat::EuGrouped).is_none());
+        assert!(normalise_number("1,23", NumberFormat::UsGrouped).is_none());
+    }
+
+    #[test]
+    fn a_trailing_or_leading_separator_is_refused() {
+        assert!(normalise_number("2500.", NumberFormat::Plain).is_none());
+        assert!(normalise_number(".50", NumberFormat::Plain).is_none());
+        assert!(normalise_number("", NumberFormat::Plain).is_none());
+        assert!(normalise_number("-", NumberFormat::Plain).is_none());
+    }
+
+    #[test]
+    fn the_ambiguous_string_is_readable_under_both_conventions_by_design() {
+        // 5.500 is well formed in both, which is exactly why the convention has
+        // to be named and committed rather than inferred. Same argument as the
+        // date formats.
+        assert_eq!(normalise_number("5.500", NumberFormat::Plain).as_deref(), Some("5.500"));
+        assert_eq!(normalise_number("5.500", NumberFormat::EuGrouped).as_deref(), Some("5500"));
+    }
+
+    #[test]
+    fn a_number_from_another_convention_is_not_truncated_into_a_match() {
+        // The extractor must not cut a token out of a number written another
+        // way. Read under Plain, "1,234.56" would otherwise yield "1", and a
+        // proof that the first plain number after the label is under five would
+        // be true of that token and false of the page.
+        assert_eq!(extract_anchored("Saldo: 1,234.56 EUR", "Saldo:", 30,
+            &AnchoredKind::Number(NumberFormat::Plain)), None);
+        assert_eq!(extract_anchored("Saldo: 2.847,50 EUR", "Saldo:", 30,
+            &AnchoredKind::Number(NumberFormat::Plain)), None);
+        assert_eq!(extract_anchored("Saldo: 2500.00 EUR", "Saldo:", 30,
+            &AnchoredKind::Number(NumberFormat::EuGrouped)), None);
+        // Under its own convention the whole thing is one token.
+        assert_eq!(extract_anchored("Saldo: 1,234.56 EUR", "Saldo:", 30,
+            &AnchoredKind::Number(NumberFormat::UsGrouped)).as_deref(), Some("1,234.56"));
+        assert_eq!(extract_anchored("Saldo: 2.847,50 EUR", "Saldo:", 30,
+            &AnchoredKind::Number(NumberFormat::EuGrouped)).as_deref(), Some("2.847,50"));
+    }
+
+    #[test]
+    fn a_full_stop_ending_a_sentence_is_not_a_thousands_separator() {
+        let v = extract_anchored("Total: 5.500. Next line", "Total:", 40,
+            &AnchoredKind::Number(NumberFormat::EuGrouped));
+        assert_eq!(v.as_deref(), Some("5.500"));
+        assert_eq!(normalise_number(v.as_deref().unwrap(), NumberFormat::EuGrouped).as_deref(), Some("5500"));
     }
 
     use super::{age_years, civil_from_days, KeyRegistryEntry};
@@ -691,7 +944,7 @@ mod tests {
     #[test]
     fn anchored_first_occurrence_is_bound_not_second() {
         let body = "Previous Balance: 5000.00 EUR\nCurrent Balance: 250.00 EUR";
-        let v = extract_anchored(body, "Balance:", 30, &AnchoredKind::Number);
+        let v = extract_anchored(body, "Balance:", 30, &AnchoredKind::Number(NumberFormat::Plain));
         assert_eq!(v.as_deref(), Some("5000.00"),
             "extractor must bind to the FIRST 'Balance:' occurrence");
     }
@@ -700,28 +953,28 @@ mod tests {
     /// byte scanner and do not confuse the digit-start search.
     #[test]
     fn anchored_number_skips_currency_prefix() {
-        let v = extract_anchored("Amount: \u{20AC}2847.50", "Amount:", 20, &AnchoredKind::Number);
+        let v = extract_anchored("Amount: \u{20AC}2847.50", "Amount:", 20, &AnchoredKind::Number(NumberFormat::Plain));
         assert_eq!(v.as_deref(), Some("2847.50"));
     }
 
     /// Large number with thousand-group separators is collected in one token.
     #[test]
     fn anchored_number_large_with_separators() {
-        let v = extract_anchored("Saldo: 1,000,000.00", "Saldo:", 20, &AnchoredKind::Number);
+        let v = extract_anchored("Saldo: 1,000,000.00", "Saldo:", 20, &AnchoredKind::Number(NumberFormat::UsGrouped));
         assert_eq!(v.as_deref(), Some("1,000,000.00"));
     }
 
     /// EU-format negative balance: sign is preserved and commas/dots are kept as-is.
     #[test]
     fn anchored_number_negative_eu_format() {
-        let v = extract_anchored("Balance: -2.847,50 EUR", "Balance:", 20, &AnchoredKind::Number);
+        let v = extract_anchored("Balance: -2.847,50 EUR", "Balance:", 20, &AnchoredKind::Number(NumberFormat::EuGrouped));
         assert_eq!(v.as_deref(), Some("-2.847,50"));
     }
 
     /// Anchor absent entirely: returns None.
     #[test]
     fn anchored_returns_none_when_anchor_absent() {
-        let v = extract_anchored("Amount: 100.00", "Balance:", 20, &AnchoredKind::Number);
+        let v = extract_anchored("Amount: 100.00", "Balance:", 20, &AnchoredKind::Number(NumberFormat::Plain));
         assert!(v.is_none(), "must return None when anchor is not present");
     }
 

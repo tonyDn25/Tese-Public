@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Real-proof scaling campaign: same-page field counts 1..5 on /account.
-# Config matches the measured key-registry guest (71442f7b):
+# Config matches the measured key-registry guest (50e385ca):
 #   real proofs (dev_mode off), GPS_SEGMENT_PO2=19 (≈6.9 GB peak, ~525 KB seal),
 #   CPU-pinned. Logs one CSV row per run: fields,run,time_s,seal_bytes,total_cycles.
 set -u
@@ -15,9 +15,9 @@ OUT="$REPO/benchmarks/scaling_1to5.csv"
 LOG="$REPO/benchmarks/scaling_1to5.log"
 RUNS="${RUNS:-3}"
 
-F1='regex:Account Balance.{0,300}?([+-]?[0-9][0-9.,]*)|||balance';      P1='> 1000'
+F1='regex:Account Balance.{0,300}?([+-]?[0-9]+(\.[0-9]+)?)|||balance';      P1='> 1000'
 F2='regex:Account Holder.{0,300}?(Alice Smith)|||holder';              P2='== "Alice Smith"'
-F3='regex:NIF.{0,300}?([0-9][0-9.,]*)|||nif';                          P3='> 100000000'
+F3='regex:NIF.{0,300}?([+-]?[0-9]+(\.[0-9]+)?)|||nif';                          P3='> 100000000'
 F4='regex:Account Type.{0,300}?(Premium Current Account)|||acct_type'; P4='== Premium Current Account'
 F5='regex:Verified.{0,300}?(true)|||verified';                         P5='== true'
 

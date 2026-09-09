@@ -2,7 +2,7 @@
 # ============================================================================
 # GPS adversarial negative-test suite (cases A–I)
 #
-# Exercises the REAL v12 guest (image_id 71442f7b…) against adversarial inputs.
+# Exercises the REAL v13 guest (image_id 50e385ca…) against adversarial inputs.
 # Runs in RISC0_DEV_MODE=1: the guest still EXECUTES in full (every assert/panic
 # fires, every extraction runs), only STARK proving is skipped, so the suite runs
 # in seconds. Dev mode is sound for FUNCTIONAL correctness: it is exactly the
@@ -47,7 +47,11 @@ LEAF_PRIV="$REPO/nginx/keys/nginx_private.pem"
 REG="$REPO/nginx/keys/gps-keys.json"
 SESS="$REPO/sessions/session_direct_172_18_0_50_4502b208.json"
 SID8="4502b208"                       # session-id prefix the guest matches on
-BAL='regex:Account Balance.{0,300}?([+-]?[0-9][0-9.,]*)|||balance'
+# The numeric convention is part of the pattern and therefore part of the rule
+# the guest commits (2026-09-09); the demo pages write plain decimals.
+BAL='regex:Account Balance.{0,300}?([+-]?[0-9]+(\.[0-9]+)?)|||balance'
+BAL_EU='regex:Account Balance.{0,300}?([+-]?[0-9]{1,3}(\.[0-9]{3})+(,[0-9]+)?)|||balance'
+BAL_OLD='regex:Account Balance.{0,300}?([+-]?[0-9][0-9.,]*)|||balance'
 HOLDER='regex:Account Holder.{0,300}?(Alice Smith)|||holder'
 RESULTS="$REPO/tests/adversarial/RESULTS.md"
 TMP="$(mktemp -d)"; trap 'rm -rf "$TMP"' EXIT
@@ -242,9 +246,78 @@ else verdict H2 "signature-input missing keyid" abort abort "$(abort_reason)"; f
 
 # -- I: body with no matching anchor -----------------------------------------
 # Name a label not present in the body; extractor finds no anchor → abort.
-prove1 "$PROD" "" "$SESS" /account 'regex:Nonexistent Label.{0,300}?([+-]?[0-9][0-9.,]*)|||ghost' "> 1000"
+prove1 "$PROD" "" "$SESS" /account 'regex:Nonexistent Label.{0,300}?([+-]?[0-9]+(\.[0-9]+)?)|||ghost' "> 1000"
 if [ -f "$TMP/p.json" ]; then verdict I "anchor names a label absent from the body" abort proof "UNEXPECTED PROOF"
 else verdict I "anchor names a label absent from the body" abort abort "$(abort_reason)"; fi
+
+# -- J: numeric convention (2026-09-09) --------------------------------------
+# The origin signs a body stating a EUROPEAN balance of 5.500 (five thousand five
+# hundred). Before the convention became part of the rule, the guest inferred the
+# reading from whichever separators were present, read 5.5, and emitted a valid
+# proof of "< 1000": true of the token and false of the page.
+mk_balance() { # <displayed value> <outfile>
+  perl -0777 -pe "s/<div class=\"value\" id=\"balance\">2500\.00 EUR<\/div>/<div class=\"value\" id=\"balance\">$1 EUR<\/div>/" "$ORIG_BODY" > "$2"
+}
+
+# J1: the page's own convention, asserting a threshold the page does NOT clear.
+mk_balance '5.500' "$TMP/body_J.html"
+resign_account "$TMP/body_J.html" "$TMP/session_${SID8}_J.json"
+prove1 "$PROD" "" "$TMP/session_${SID8}_J.json" /account "$BAL_EU" "< 1000"
+if [ -f "$TMP/p.json" ]; then verdict J1 "European 5.500 (=5500) asserted < 1000" abort proof "UNEXPECTED PROOF, the guess is back"
+else verdict J1 "European 5.500 (=5500) asserted < 1000" abort abort "$(abort_reason)"; fi
+
+# J2: a US-formatted value read under the Plain convention. The declared reading
+# cannot express the value, so the field is refused rather than truncated to '1'.
+mk_balance '1,234.56' "$TMP/body_J2.html"
+resign_account "$TMP/body_J2.html" "$TMP/session_${SID8}_J2.json"
+prove1 "$PROD" "" "$TMP/session_${SID8}_J2.json" /account "$BAL" "< 5"
+if [ -f "$TMP/p.json" ]; then verdict J2 "1,234.56 read as Plain, asserted < 5" abort proof "UNEXPECTED PROOF, value truncated"
+else verdict J2 "1,234.56 read as Plain, asserted < 5" abort abort "$(abort_reason)"; fi
+
+# J3: a rule that names no convention at all cannot order anything.
+prove1 "$PROD" "" "$TMP/session_${SID8}_J.json" /account "$BAL_OLD" "< 1000"
+if [ -f "$TMP/p.json" ]; then verdict J3 "ordering predicate with no declared convention" abort proof "UNEXPECTED PROOF"
+else verdict J3 "ordering predicate with no declared convention" abort abort "$(abort_reason)"; fi
+
+# J4: control. The same European page proving a statement that IS true of it.
+prove1 "$PROD" "" "$TMP/session_${SID8}_J.json" /account "$BAL_EU" "> 1000"
+if [ -f "$TMP/p.json" ]; then verdict J4 "control: European 5.500 asserted > 1000" proof proof "extracted $(extracted_stmt)"
+else verdict J4 "control: European 5.500 asserted > 1000" proof abort "UNEXPECTED: $(abort_reason)"; fi
+
+# -- K: the signed `created` timestamp (2026-09-09) --------------------------
+# RFC 9421 makes `created` optional. When it was absent the guest fell back to the
+# session's own timestamp, which no signature covers, so a prover chose the clock
+# an age predicate was measured against, and the registry expiry compared against
+# zero and always passed. `created` is now mandatory.
+PARAMS_NOCREATED=$(printf '%s' "$PARAMS" | sed 's/;created=[0-9]*//')
+resign_account_params() { # <body> <params> <out>
+  local body="$1" params="$2" out="$3" digest sig
+  digest="sha-256=:$(openssl dgst -sha256 -binary "$body" | base64 -w0):"
+  printf '"@method": GET\n"@authority": %s\n"@target-uri": %s\n"@status": 200\n"content-digest": %s\n"date": %s\n"@signature-params": %s' \
+    "$AUTH" "$TURI" "$digest" "$DATE" "$params" > "$TMP/base_k.txt"
+  openssl dgst -sha256 -sign "$LEAF_PRIV" -out "$TMP/sig_k.der" "$TMP/base_k.txt"
+  sig="sig1=:$(base64 -w0 "$TMP/sig_k.der"):"
+  jq --rawfile b "$body" --arg sig "$sig" --arg dig "$digest" --arg si "sig1=$params" '
+    (.pages[]|select(.request.path=="/account")|.response.body) = $b |
+    (.pages[]|select(.request.path=="/account")|.response.headers.signature) = $sig |
+    (.pages[]|select(.request.path=="/account")|.response.headers["content-digest"]) = $dig |
+    (.pages[]|select(.request.path=="/account")|.response.headers["signature-input"]) = $si
+  ' "$SESS" > "$out"
+}
+resign_account_params "$ORIG_BODY" "$PARAMS_NOCREATED" "$TMP/session_${SID8}_K.json"
+prove1 "$PROD" "" "$TMP/session_${SID8}_K.json" /account "$BAL" "> 1000"
+if [ -f "$TMP/p.json" ]; then verdict K1 "signature parameters carry no 'created'" abort proof "UNEXPECTED PROOF, unsigned clock accepted"
+else verdict K1 "signature parameters carry no 'created'" abort abort "$(abort_reason)"; fi
+
+# K2: the same page against a registry entry that expired in 2020. With `created`
+# absent the expiry compared against 0 and passed; it must now be unreachable.
+LEAFB64=$(jq -r '.[0].entry.leaf_pubkey_pem' "$REG" | grep -v '^-----' | tr -d '[:space:]')
+printf 'gps-key-registry-v1\nkeyid=gps-nginx\ndomain=172.18.0.50\nnot_after=1577836800\nleaf=%s' "$LEAFB64" > "$TMP/canon_k2"
+openssl dgst -sha256 -sign "$REPO/nginx/keys/gps_root_private.pem" -out "$TMP/rsig_k2.der" "$TMP/canon_k2"
+jq --arg s "$(base64 -w0 "$TMP/rsig_k2.der")" '.[0].entry.not_after = 1577836800 | .[0].root_sig_b64 = $s' "$REG" > "$TMP/reg_K2.json"
+GPS_KEY_REGISTRY="$TMP/reg_K2.json" prove1 "$PROD" "" "$TMP/session_${SID8}_K.json" /account "$BAL" "> 1000"
+if [ -f "$TMP/p.json" ]; then verdict K2 "expired registry entry, no 'created' to check it against" abort proof "UNEXPECTED PROOF"
+else verdict K2 "expired registry entry, no 'created' to check it against" abort abort "$(abort_reason)"; fi
 
 echo
 echo "=== $overall_pass passed, $overall_fail failed ==="
@@ -255,13 +328,14 @@ echo "=== $overall_pass passed, $overall_fail failed ==="
   echo
   echo "Generated by \`tests/adversarial/run_suite.sh\` on $(date -u '+%Y-%m-%d %H:%M UTC')."
   echo
-  echo "- **Guest:** v12, image_id \`71442f7b…\` (production binary \`bin/gps-host\`)."
+  echo "- **Guest:** v13, image_id \`50e385ca…\` (production binary \`bin/gps-host\`)."
   echo "- **Mode:** \`RISC0_DEV_MODE=1\`: the guest executes in full (all asserts/panics/extraction"
   echo "  run); only the STARK seal is skipped. Functional soundness is exactly what is tested."
   echo "- **Forged-hint cases (A, E):** run against the \`--features attack-sim\` build"
   echo "  (\`zkvm/target/release/host\`), which lets the host inject a forged value hint via"
   echo "  \`GPS_SIM_FORGE_VALUE\`. The production binary cannot do this (KI-23)."
-  echo "- **Crafted-body cases (B, C, D):** a new HTML body is built and RE-SIGNED with the origin's"
+  echo "- **Crafted-body cases (B, C, D, J, K):** a new HTML body, or a new set of signature"
+  echo "  parameters, is built and RE-SIGNED with the origin's"
   echo "  leaf key (valid content-digest + 6-component RFC 9421 signature), modelling an adversarial"
   echo "  ORIGIN that controls and signs its own HTML, the dissertation's trust boundary."
   echo

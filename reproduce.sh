@@ -8,7 +8,7 @@
 #  costs (Table 6.4), the n=10 timing campaign (Table 6.3), and the browser/
 #  extension flow (Firefox, with instructions).
 #
-#  System under test: this folder  (canonical guest image_id 71442f7b…)
+#  System under test: this folder  (canonical guest image_id 50e385ca…)
 #
 #  USAGE
 #    ./reproduce.sh <command>
@@ -16,7 +16,7 @@
 #  COMMANDS (fast → slow)
 #    env        Print tool versions and check prerequisites.
 #    build      Build the zkVM host+guest; print the guest image_id and
-#               compare it to the expected 71442f7b… (proves source==artifacts).
+#               compare it to the expected 50e385ca… (proves source==artifacts).
 #    verify     Verify the four shipped proofs (gps-host + risc0-verifier) and
 #               time the verification (Table 6.7: 20-170 ms).
 #    soundness  Run the 13-case adversarial suite (categories A–I) against the
@@ -40,7 +40,7 @@ REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$REPO"
 
 # -- expected reference values (this machine, 2026-06) ----------------------
-EXP_IMAGE_ID="71442f7b757c93edf1a14b0535a68b427d80818a156a9eb4ff2c936cfbc2e65b"
+EXP_IMAGE_ID="50e385cac9acdd6b9cc3e6c21a19daf33d6d817cad32d5fe7fe17d2728eddcd0"
 TR="$REPO/sessions"
 export GPS_KEY_REGISTRY="$REPO/nginx/keys/gps-keys.json"
 # the dissertation's segment cap; matches Table 6.3 seals and caps proving memory
@@ -48,10 +48,12 @@ export GPS_SEGMENT_PO2=19
 SESS1="$TR/session_direct_172_18_0_50_4502b208.json"
 SESSP="$TR/session_pdf_e0c3c3c9.json"
 SESSM="$TR/session_multipage_82a6a7bf.json"
-BAL='regex:Account Balance.{0,300}?([+-]?[0-9][0-9.,]*)|||balance'
+# The numeric convention is part of the pattern, and therefore part of the rule
+# the guest commits (2026-09-09). The demo pages write plain decimals.
+BAL='regex:Account Balance.{0,300}?([+-]?[0-9]+(\.[0-9]+)?)|||balance'
 HOLD='regex:Account Holder.{0,300}?(Alice Smith)|||holder'
 NIF='regex:Contribuinte sob o n .{0,20}?(500 960 046)|||nif'
-MB1='regex:id="balance">.{0,20}?([0-9][0-9.,]*)|||balance'
+MB1='regex:id="balance">.{0,20}?([+-]?[0-9]+(\.[0-9]+)?)|||balance'
 MW2='regex:Caixadirecta, .{0,50}?(António Silva)|||welcome_name'
 
 # prefer the freshly built host; fall back to the shipped one, then installed
@@ -288,7 +290,7 @@ cmd_firefox(){
   echo
   echo "${CB}Check the host is alive:${C0}  cat /tmp/gps-host.log   (look for 'wrapper invoked')"
   echo
-  note "A browser-captured proof carries the same image_id (71442f7b…), binding (in-circuit),"
+  note "A browser-captured proof carries the same image_id (50e385ca…), binding (in-circuit),"
   note "field_selected (anchored:\"Account Balance\"->number(w=300)) and dev_mode=false as the CLI proofs."
   echo
   read -rp "Bring up the server + install the host now? [y/N] " a

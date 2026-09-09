@@ -17,7 +17,7 @@ ROOT_PRIV="$REPO/nginx/keys/gps_root_private.pem"
 LEAF_PUB="$REPO/nginx/keys/nginx_public.pem"
 SESS="$REPO/sessions/session_direct_172_18_0_50_4502b208.json"
 REG="$REPO/nginx/keys/gps-keys.json"
-BAL='regex:Account Balance.{0,300}?([+-]?[0-9][0-9.,]*)|||balance'
+BAL='regex:Account Balance.{0,300}?([+-]?[0-9]+(\.[0-9]+)?)|||balance'
 TMP="$(mktemp -d)"; trap 'rm -rf "$TMP"' EXIT
 export RISC0_DEV_MODE=1
 pass=0; fail=0
