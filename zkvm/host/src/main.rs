@@ -689,6 +689,14 @@ fn handle_native_request(request: &serde_json::Value) -> serde_json::Value {
     }
     let action = request.get("action").and_then(|a| a.as_str()).unwrap_or("");
 
+    // Capture-path messages from the extension, written to stderr, which the
+    // wrapper redirects to /tmp/gps-host.log.
+    if action == "log" {
+        let msg = request.get("msg").and_then(|v| v.as_str()).unwrap_or("");
+        eprintln!("  [capture] {msg}");
+        return serde_json::json!({ "ok": true });
+    }
+
     if action == "list_sessions" {
         let dir = request.get("dir").and_then(|d| d.as_str()).unwrap_or("");
         return list_sessions(dir);

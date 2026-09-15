@@ -19,6 +19,8 @@ const pendingRequests  = new Map();
 chrome.webRequest.onBeforeSendHeaders.addListener(
     (details) => {
         if (details.method !== 'GET' && details.method !== 'POST') return;
+        if (typeof details.tabId !== 'number' || details.tabId < 0) return;
+        if (details.originUrl && details.originUrl.startsWith('moz-extension://')) return;
         pendingRequests.set(details.requestId, {
             method: details.method,
             url:    details.url,
@@ -35,6 +37,10 @@ chrome.webRequest.onHeadersReceived.addListener(
         const req = pendingRequests.get(details.requestId);
         pendingRequests.delete(details.requestId);
         if (!req) return;
+
+        // No tab means this is the extension's own body fetch. Recording it would
+        // make each fetch record the page again and schedule another fetch.
+        if (typeof req.tabId !== 'number' || req.tabId < 0) return;
 
         // Check if this is a GPS-signed response
         const headers = {};
@@ -66,8 +72,14 @@ chrome.webRequest.onHeadersReceived.addListener(
 
         const session = inMemorySessions.get(tabId);
 
+        // One capture per path per session, keeping the newest. Checked against
+        // all pages, not only fetched ones, because several captures of one path
+        // can be in flight at once.
+        const path = urlObj.pathname + urlObj.search;
+        const existing = session.pages.findIndex(p => p.request.path === path);
+
         // Store pending page, body will be filled by content script
-        session.pages.push({
+        const page = {
             id:        crypto.randomUUID(),
             timestamp: (headers['x-gps-timestamp'] || Math.floor(Date.now()/1000).toString()),
             domain:    authority,
@@ -83,43 +95,41 @@ chrome.webRequest.onHeadersReceived.addListener(
             },
             nginx_public_key: '',
             _pending_url: req.url, // temp field, removed before saving
-        });
+        };
+        if (existing >= 0) session.pages[existing] = page; else session.pages.push(page);
+        hostLog(`saw a signed response: ${req.method} ${urlObj.pathname} (tab ${tabId})`);
+        // Timer trigger: fires even when no navigation event arrives. It waits
+        // longer than a normal page load so the event triggers run first.
+        setTimeout(() => drainPendingBodies(tabId, 'timer'), 2500);
 
     },
     { urls: ['https://*/*'] },
     ['responseHeaders']
 );
 
-// -- Tab navigation complete: fetch body directly from server -----------------
-chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
-    if (changeInfo.status !== 'complete') return;
+// -- Fetch the bodies of every page captured for a tab, then save -------------
+//
+// Three triggers call this: tabs.onUpdated, webNavigation.onCompleted, and the
+// timer set when a signed response arrives. tabs.onUpdated alone does not fire
+// for every navigation in Firefox. `_draining` stops overlapping runs.
+async function drainPendingBodies(tabId, why) {
     if (!inMemorySessions.has(tabId)) return;
-
     const session = inMemorySessions.get(tabId);
+    if (session._draining) return;
     const pendingPages = session.pages.filter(p => p._pending_url);
     if (!pendingPages.length) return;
+    session._draining = true;
+    hostLog(`draining ${pendingPages.length} body/bodies for tab ${tabId} (trigger: ${why})`);
 
     // Fetch each pending page's body directly, byte-identical to what NGINX signed.
     //
-    // The body has to be fetched separately because webRequest exposes headers and
-    // not bodies. That second request should carry the same credentials as the
-    // first, or it is not the same resource: on a page behind a session cookie an
-    // uncredentialed refetch returns a sign-in page, the content-digest check fails
-    // against the signed body, and every proof aborts. It was 'omit' until
-    // 2026-09-09, which made capture structurally unable to reach a credentialed
-    // page, the one the motivating scenario is about.
-    //
-    // But 'include' is not universally safe either, and the demo origin proved it
-    // the first time this ran in a browser. An origin that answers with
-    // `Access-Control-Allow-Origin: *` cannot serve a credentialed fetch: a
-    // wildcard cannot say who is allowed to read a response carrying someone's
-    // cookies, so the fetch is rejected before the body arrives. Origins that sign
-    // for machine consumption commonly send exactly that wildcard.
-    //
-    // So try the credentialed fetch, and fall back to the uncredentialed one when
-    // it fails. Both outcomes are recorded on the page and travel into the session,
-    // because which one was used decides what a digest mismatch later means: with
-    // 'omit' on a gated page, a mismatch is this fallback and not tampering.
+    // webRequest exposes headers but not bodies, so the body is fetched again. The
+    // fetch sends the page's credentials: without them a page behind a login
+    // returns a sign-in page and the digest check fails. An origin that answers
+    // with `Access-Control-Allow-Origin: *` rejects credentialed fetches, so on
+    // failure it retries without credentials. The mode used is stored on the page,
+    // because with 'omit' on a gated page a digest mismatch means this fallback,
+    // not tampering.
     const fetchBody = async (url) => {
         for (const credentials of ['include', 'omit']) {
             try {
@@ -135,7 +145,7 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
         }
     };
 
-    Promise.all(pendingPages.map(async (page) => {
+    await Promise.all(pendingPages.map(async (page) => {
         const url = page._pending_url;
         try {
             const { resp, credentials } = await fetchBody(url);
@@ -153,34 +163,44 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
             } else {
                 body = await resp.text();
             }
+            hostLog(`fetched ${url} with credentials='${credentials}', ${body.length} bytes`);
             page.response.body = body;
             page._fetch_credentials = credentials;
             delete page._pending_url;
         } catch (e) {
-            // Swallowing this is what made the failure invisible: the page kept an
-            // empty body, saveSessionToHost filtered it out, and the session simply
-            // never appeared, with nothing anywhere to say why. Say so instead.
+            // Report the failure; otherwise the page is silently dropped at save.
+            hostLog(`FETCH FAILED for ${url}: ${e.message}. This page is not captured.`);
             console.error(`GPS: could not fetch the body of ${url}: ${e.message}. `
                         + `This page will NOT be captured.`);
             page._fetch_error = e.message;
             delete page._pending_url;
         }
-    })).then(() => {
-        saveSessionToHost(session, tabId);
-    });
+    }));
+    session._draining = false;
+    saveSessionToHost(session, tabId);
+}
+
+chrome.tabs.onUpdated.addListener((tabId, changeInfo) => {
+    if (changeInfo.status === 'complete') drainPendingBodies(tabId, 'tabs.onUpdated');
 });
+
+// Second trigger: the navigation API reporting the same completion.
+if (chrome.webNavigation && chrome.webNavigation.onCompleted) {
+    chrome.webNavigation.onCompleted.addListener((d) => {
+        if (d.frameId === 0) drainPendingBodies(d.tabId, 'webNavigation.onCompleted');
+    });
+}
 
 function saveSessionToHost(session, tabId) {
     const completedPages = session.pages.filter(
         p => p.response.body && p.response.headers['signature']
     );
     if (!completedPages.length) {
-        // Returning quietly here is half of why a failed body fetch was invisible:
-        // the other half is the catch above. A session that captured nothing is
-        // worth saying out loud, with the reason each page was dropped.
+        // Nothing to save: report why each page was dropped.
         const why = session.pages.map(p =>
             `${p.request.path}: ${p._fetch_error ? 'fetch failed, ' + p._fetch_error
               : !p.response.body ? 'no body' : 'no signature header'}`).join('; ');
+        hostLog(`NOTHING CAPTURED for ${session.domain}: ${why}`);
         console.error(`GPS: nothing captured for ${session.domain} `
                     + `(${session.pages.length} signed response(s) seen). ${why}`);
         return;
@@ -201,6 +221,9 @@ function saveSessionToHost(session, tabId) {
         if (res?.ok) {
             const s = inMemorySessions.get(tabId);
             if (s) s._saved_path = res.path;
+            hostLog(`SAVED ${completedPages.length} page(s) to ${res.path}`);
+        } else {
+            hostLog(`SAVE REFUSED by the host: ${res?.error || 'no reply'}`);
         }
     });
 }
@@ -210,37 +233,25 @@ let nativePort = null;
 let pendingCallbacks = new Map();
 let msgId = 0;
 
-// The native port can drop for reasons that have nothing to do with the request
-// in flight: Firefox tearing the background page down, the host being replaced by
-// a rebuild, a transient spawn failure. The host itself is a persistent read/reply
-// loop and a fresh one answers immediately, so a drop is a RECOVERABLE event and
-// not a result. Failing the caller with the raw internal string 'disconnected' was
-// wrong twice over: it surfaced an internal state name in the UI, and it threw away
-// a request that would have succeeded on the very next port.
-//
-// Each pending call therefore keeps enough context to be re-sent exactly once.
+// The native port can drop for reasons unrelated to the request in flight
+// (Firefox unloading the background page, the host being rebuilt, a transient
+// spawn failure). A fresh host answers immediately, so a drop is recoverable:
+// each pending call keeps its message and is re-sent once before failing.
 const pendingMessages = new Map();   // id -> the original message
 const retriedOnce     = new Set();   // ids already replayed, so a flapping port
                                      // cannot loop a 2-minute proof forever
 
-// The liveness ping sent on every connect is UNSOLICITED: no caller is waiting for
-// its reply. It must therefore be identifiable, because a reply that cannot be routed
-// to the caller that asked for it must be DROPPED, never handed to whoever happens to
-// be first in the queue. Routing by "first pending callback" is what made a reconnect
-// resolve an in-flight proof with {pong:true,version}, which has neither `ok` nor
-// `error`, so the popup fell back to its generic "Proof generation failed." while the
-// host had done nothing wrong at all.
+// The ping sent on every connect is unsolicited, so it carries a fixed id and
+// its reply is dropped. A reply that matches no pending id is never handed to
+// another caller.
 const PING_ID = 0;
 
 function connectNative() {
     try {
         nativePort = chrome.runtime.connectNative(NATIVE_HOST);
         nativePort.onMessage.addListener((msg) => {
-            // Strict routing by _id only. The host echoes the _id of every request
-            // that carried one, so a reply without a matching pending id belongs to
-            // nobody: the connect ping, or a duplicate from a host replaced mid-flight.
-            // Both must be dropped. The old first-in-the-queue fallback silently
-            // mis-delivered those to an unrelated caller.
+            // Route strictly by _id; drop the connect ping and any reply whose
+            // id is not pending.
             if (msg._id === undefined || msg._id === PING_ID) return;
             const cb = pendingCallbacks.get(msg._id);
             if (!cb) return;
@@ -260,8 +271,7 @@ function connectNative() {
                     const msg = pendingMessages.get(id);
                     if (!cb) continue;
                     if (retriedOnce.has(id) || !msg || !nativePort) {
-                        // Second failure, or nothing to replay: now it is a real
-                        // error, and it says what the user can do about it.
+                        // Second failure, or nothing to replay: report it.
                         pendingCallbacks.delete(id);
                         pendingMessages.delete(id);
                         retriedOnce.delete(id);
@@ -285,6 +295,9 @@ function connectNative() {
     } catch (e) { setTimeout(connectNative, 2000); }
 }
 connectNative();
+
+// Send capture-path messages to the host log (/tmp/gps-host.log).
+function hostLog(msg) { try { nativeCall({ action: 'log', msg }); } catch (e) {} }
 
 function nativeCall(msg) {
     return new Promise((resolve) => {
@@ -313,13 +326,9 @@ function nativeCall(msg) {
     });
 }
 
-// The guest matches a field's target against `Transcript.request.path`, so the
-// value it is given must be a PATH. The capture side knows pages by their full
-// URL, and sending that through meant find_target_page() could never match: the
-// guest then aborted, correctly, with "URL not found in session", and every proof
-// started from the browser failed while the identical proof from the CLI worked.
-// Normalise here, at the boundary, because the guest cannot be changed to be more
-// forgiving without altering its ELF and therefore the image_id.
+// The guest matches a field's target against `Transcript.request.path`, so it
+// must receive a path, not the full URL the capture side uses. Normalised here
+// because changing the guest would change its image_id.
 function toPath(u) {
     if (!u) return '/';
     try { return new URL(u).pathname || '/'; }
