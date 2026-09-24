@@ -1,11 +1,11 @@
-# GPS: Full Guide (project, running, testing, validating)
+# SPAR: Full Guide (project, running, testing, validating)
 
-**GPS** = *General Privacy-preserving web proof System*. It produces non-interactive, publicly
+**SPAR** = *Selective Proofs over Authenticated Responses* (called **GPS** during development; code identifiers, file names, the extension UI and program output still use that name). It produces non-interactive, publicly
 verifiable **zero-knowledge proofs** about a single field of an **RFC 9421-signed** web response,
 revealing nothing else about the page. No trusted hardware, no online third party, and no server
 change beyond signing.
 
-- **Source tree:** this folder (the code needed to build, run, and verify GPS end to end).
+- **Source tree:** this folder (the code needed to build, run, and verify SPAR end to end).
 - **Guest image identifier:** `50e385cac9acdd6b9cc3e6c21a19daf33d6d817cad32d5fe7fe17d2728eddcd0`
   (the SHA-256 of the compiled zkVM guest; trusting a proof means trusting this exact program).
 - **One-shot reproduction:** [`./reproduce.sh`](#7-running-testing-validating), see §7.
@@ -13,7 +13,7 @@ change beyond signing.
 ---
 
 ## Contents
-1. [What problem GPS solves](#1-what-problem-gps-solves)
+1. [What problem SPAR solves](#1-what-problem-spar-solves)
 2. [How it works (the pipeline)](#2-how-it-works-the-pipeline)
 3. [Glossary, the meaning of every term](#3-glossary)
 4. [Components, what each piece does](#4-components)
@@ -28,18 +28,18 @@ change beyond signing.
 
 ---
 
-## 1. What problem GPS solves
+## 1. What problem SPAR solves
 A user often needs to prove **one fact** from a logged-in web page to a third party, "my balance is
 over €1000", "this statement names me", without handing over their password, a forgeable screenshot,
 or the whole page. TLS secures the *connection* but leaves **no artefact a third party can check**
 afterwards (both endpoints share the keys, so a saved transcript could have been typed up by the
-client). GPS closes that gap: the origin signs responses at the application layer (RFC 9421), and a
+client). SPAR closes that gap: the origin signs responses at the application layer (RFC 9421), and a
 zkVM proves a predicate over a chosen field of a signed response in zero knowledge. The proof is
 **transferable** (anyone can check it offline) and **selective** (only the predicate's truth leaks).
 
 ## 2. How it works (the pipeline)
 ```
- Firefox + extension --> direct capture --> GPS origin (RFC 9421 signing)
+ Firefox + extension --> direct capture --> SPAR origin (RFC 9421 signing)
         |                                                        |
         |                       signed response(s) recorded into a Session (JSON)
         v                                                        v
@@ -79,7 +79,7 @@ verified body and binds the proven value to it; (4) evaluates the **predicate** 
 | Path | Role |
 |------|------|
 | `gps-server/` | OpenResty (Nginx + Lua) **origin** that signs HTML and PDF responses (RFC 9421) and serves the registry at `/.well-known/gps-keys`. |
-| `nginx/keys/` | Signing material (mounted, not baked in): leaf keypair, **GPS root keypair**, `gps-keys.json` registry. |
+| `nginx/keys/` | Signing material (mounted, not baked in): leaf keypair, **SPAR root keypair**, `gps-keys.json` registry. |
 | `sessions/` | Sample sessions (signed responses) captured by the extension. |
 | `extension/` | Firefox **extension** (capture by click, direct browser-side capture) + native-messaging host manifest + `install.sh`. |
 | `zkvm/methods/guest/` | The **guest** (security-critical; the only component trusted for soundness). |
@@ -101,7 +101,7 @@ verified body and binds the proven value to it; (4) evaluates the **predicate** 
 5. exactly the program named by `image_id` did all of the above.
 
 **Not proven:** that the page reflects real-world truth (an honest-but-wrong origin signs a false value
-into a valid proof, GPS proves *provenance + integrity*, not *correctness*); anything about the TLS
+into a valid proof, SPAR proves *provenance + integrity*, not *correctness*); anything about the TLS
 channel; that the matched label is the *intended* field rather than a same-labelled value the origin
 also signed (**the verifier audits label uniqueness**: see dissertation §6.3, Cases B/C/D). Trust bottoms
 out at the single pinned root; there is an expiry but **no revocation yet**. The user's machine is trusted.
@@ -167,7 +167,7 @@ Everything is driven by **`./reproduce.sh <command>`** (run `./reproduce.sh` wit
 **Recommended first run on a new machine:** `./reproduce.sh quick`, then `./reproduce.sh cycles`.
 
 ## 8. Using the REAL verifier
-A GPS proof is a JSON file with a `seal` (the STARK proof) and a `journal` (the public claims). "Real"
+A SPAR proof is a JSON file with a `seal` (the STARK proof) and a `journal` (the public claims). "Real"
 verification means cryptographically checking the seal against the guest `image_id`: **not** merely
 reading the journal. Three equivalent ways:
 
@@ -214,7 +214,7 @@ The headless evaluation in §7 needs none of this; the extension only shows live
 ./extension/install.sh    # once: installs gps-host + the native-messaging host
 ./launch.sh               # starts the server + verifier AND opens Firefox on /login
 ```
-`launch.sh` opens a real (unsandboxed) Firefox with a pre-configured profile, the GPS extension
+`launch.sh` opens a real (unsandboxed) Firefox with a pre-configured profile, the SPAR extension
 is already side-loaded and enabled. (Snap/Flatpak/firejail Firefox can't talk to the native host;
 launch.sh avoids them, see the §9 note below.)
 
@@ -327,7 +327,7 @@ tests/adversarial/      ← run_suite.sh (13-case soundness) + RESULTS.md
 bin/                    ← prebuilt gps-host (+ attack-sim build used by the suite)
 zkvm/                   ← gps-core, methods/guest (security core), host, risc0-verifier
 gps-server/             ← OpenResty RFC 9421 signer (HTML + PDF) + mock pages
-nginx/keys/             ← leaf + GPS root keypairs + gps-keys.json registry
+nginx/keys/             ← leaf + SPAR root keypairs + gps-keys.json registry
 sessions/               ← sample sessions (signed responses) captured by the extension
 extension/              ← Firefox extension + native-host install.sh + manifest
 verifier.html           ← browser proof inspector (real verify via verify-serve)

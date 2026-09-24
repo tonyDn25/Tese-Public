@@ -1,11 +1,13 @@
-# GPS: General Privacy-preserving web proof System
+# SPAR: Selective Proofs over Authenticated Responses
+
+> SPAR was called **GPS** during development. Code identifiers, file names, the browser extension and program output still use the old name.
 
 Prove to a third party that a browser observed a specific field value on a
 signed HTTPS page, without revealing the rest of the page, using a
 zero-knowledge (STARK) proof. No trusted hardware, no online third party, and no
 server change beyond RFC 9421 response signing.
 
-This folder is the code needed to **build, run, and verify** GPS end to end. The
+This folder is the code needed to **build, run, and verify** SPAR end to end. The
 full walkthrough (problem, pipeline, glossary, trust model, measured results,
 how to run/test/validate) is in **[`GUIDE.md`](GUIDE.md)**; everything is driven
 by **[`reproduce.sh`](reproduce.sh)**.
@@ -15,7 +17,7 @@ by **[`reproduce.sh`](reproduce.sh)**.
 | | |
 |---|---|
 | Guest image_id | `50e385cac9acdd6b9cc3e6c21a19daf33d6d817cad32d5fe7fe17d2728eddcd0` (sound in-circuit anchored binding + distributed trust) |
-| Trust anchor | pinned **GPS root** key → root-signed leaf-key registry, all verified in-circuit |
+| Trust anchor | pinned **SPAR root** key → root-signed leaf-key registry, all verified in-circuit |
 | Field binding | **in-circuit**: the host's value is re-extracted inside the zkVM and asserted equal; a forged value or registry entry aborts (no proof) |
 | 1-field proof | 133 s CPU (n=10 pinned mean), seal ~525 KB, tier 2²⁰, peak ~6.9 GB RAM (`GPS_SEGMENT_PO2=19`) |
 | 2-field proof | 141 s CPU (n=10 pinned mean), seal ~526 KB, tier 2²⁰ (1→2 fields is nearly free) |
@@ -28,7 +30,7 @@ They are committed deliberately, because the artifact would not be reproducible 
 
 | File | What it is |
 |---|---|
-| `nginx/keys/gps_root_private.pem` | The **GPS root** signing key. Signs registry entries. |
+| `nginx/keys/gps_root_private.pem` | The **SPAR root** signing key. Signs registry entries. |
 | `nginx/keys/nginx_private.pem` | The demo origin's **leaf** key. Signs each HTTP response. |
 | `gps-server/certs/*-key.pem` | TLS key for the local demo host `172.18.0.50`. |
 
@@ -45,7 +47,7 @@ fatal for a deployment. A real deployment generates its own root, keeps the priv
 gives it a different image identifier that verifiers trust instead of this one.
 
 ## Key properties
-- **Distributed trust**: the guest pins a long-lived **GPS root** key and trusts any
+- **Distributed trust**: the guest pins a long-lived **SPAR root** key and trusts any
   origin leaf key the root signed into a registry (`/.well-known/gps-keys`), all
   verified in-circuit. Rotating or adding an origin leaf key keeps the same image_id;
   a forged registry entry is rejected and no proof is produced.
@@ -71,7 +73,7 @@ bin/                  prebuilt gps-host (+ attack-sim build used by the soundnes
 proofs/               four real proofs (dev_mode:false, 50e385ca)
 sessions/             sample signed-response sessions captured by the extension
 gps-server/           OpenResty (Nginx + Lua) RFC 9421 signer (HTML + PDF) + mock pages
-nginx/keys/           leaf + GPS root keypairs + gps-keys.json registry
+nginx/keys/           leaf + SPAR root keypairs + gps-keys.json registry
 extension/            Firefox MV3 extension + native-host install.sh + manifest
 tests/adversarial/    13-case soundness suite (run_suite.sh) + RESULTS.md
 benchmarks/           n=10 timing campaign + measurement notes
@@ -109,7 +111,7 @@ cd zkvm/gps-core && cargo test
 
 ## What is proven (and what is not)
 
-**Proven, in zero knowledge:** the page was served under a key the **GPS root
+**Proven, in zero knowledge:** the page was served under a key the **SPAR root
 vouches for** (root signature over the registry entry + leaf signature, both
 verified in-circuit); the body was not altered after signing (content-digest
 checked in-circuit); the proven field equals an in-circuit re-extraction of the
@@ -117,7 +119,7 @@ audited selection rule; and the predicate holds, all under the specific
 `image_id`. The page body itself is never revealed.
 
 **Not proven (prototype scope):**
-- **Real-world truth.** GPS proves provenance + integrity, not correctness: an
+- **Real-world truth.** SPAR proves provenance + integrity, not correctness: an
   honest-but-wrong origin can sign a false value into a valid proof.
 - **Registry scope.** One root, an offline + HTTP registry; expiry is carried but
   revocation / transparency-log are future work.
