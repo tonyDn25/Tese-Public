@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>GPS Proof Verifier</title>
+<title>SPAR Proof Verifier</title>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body {
@@ -275,7 +275,7 @@
 <body>
 
 <div class="logo"></div>
-<h1>GPS Proof Verifier</h1>
+<h1>SPAR Proof Verifier</h1>
 <p class="subtitle">Performs <strong>real STARK verification</strong> when the local <code>gps-host verify-serve</code> service is running; otherwise falls back to an honest journal-only inspection (and tells you which one happened).</p>
 
 <div class="card">
@@ -549,7 +549,7 @@ async function verify() {
               <div class="prov-item-value">${esc(prov.trust_anchor || j.trust_anchor || ',')}</div>
             </div>
             <div class="prov-item" style="grid-column: 1 / -1">
-              <div class="prov-item-label">Body Hash (SHA-256 of signed response body)</div>
+              <div class="prov-item-label">Body commitment (salted SHA-256 in current proofs; check with gps-host verify-provenance)</div>
               <div class="prov-item-value hash">${esc(prov.source_body_hash || j.body_hash || ',')}</div>
             </div>
           </div>
@@ -586,7 +586,7 @@ async function verify() {
   // -- Image ID footer ---------------------------------------------------
   const matchClass = imageMatch ? 'match' : 'mismatch';
   const matchText = imageMatch
-    ? 'OK image_id matches known GPS guest (' + GPS_IMAGE_ID_LABELS[proof.image_id] + ')'
+    ? 'OK image_id matches known SPAR guest (' + GPS_IMAGE_ID_LABELS[proof.image_id] + ')'
     : 'FAIL image_id MISMATCH, unknown program';
   document.getElementById('imageId').innerHTML =
     `<span class="${matchClass}">${matchText}</span><br>` +

@@ -19,7 +19,7 @@ by **[`reproduce.sh`](reproduce.sh)**.
 | Guest image_id | `50e385cac9acdd6b9cc3e6c21a19daf33d6d817cad32d5fe7fe17d2728eddcd0` (sound in-circuit anchored binding + distributed trust) |
 | Trust anchor | pinned **SPAR root** key → root-signed leaf-key registry, all verified in-circuit |
 | Field binding | **in-circuit**: the host's value is re-extracted inside the zkVM and asserted equal; a forged value or registry entry aborts (no proof) |
-| 1-field proof | 133 s CPU (n=10 pinned mean), seal ~525 KB, tier 2²⁰, peak ~6.9 GB RAM (`GPS_SEGMENT_PO2=19`) |
+| 1-field proof | 133 s CPU (n=10 pinned mean), seal ~525 KB, tier 2²⁰, peak resident ~4.6 GB, VmPeak ~6.9 GB (`GPS_SEGMENT_PO2=19`) |
 | 2-field proof | 141 s CPU (n=10 pinned mean), seal ~526 KB, tier 2²⁰ (1→2 fields is nearly free) |
 | Verification | real STARK via `gps-host verify` / `risc0-verifier` / `verify-serve` (browser); 20–170 ms |
 
