@@ -19,7 +19,7 @@
 #               compare it to the expected 50e385ca… (proves source==artifacts).
 #    verify     Verify the four shipped proofs (gps-host + risc0-verifier) and
 #               time the verification (Table 6.7: 20-170 ms).
-#    soundness  Run the 13-case adversarial suite (categories A–I) against the
+#    soundness  Run the 19-case adversarial suite (categories A–K) against the
 #               real guest (Table 6.2).
 #    cycles     Measure the per-operation cycle costs (Table 6.4) by user-cycle
 #               differencing. Builds ~3 guest variants (~10 min). Edits source
@@ -137,7 +137,7 @@ cmd_verify(){
 
 # -- adversarial soundness suite (Table 6.2) --------------------------------
 cmd_soundness(){
-  hdr "Adversarial soundness suite - 13 cases across the 9 attack classes (A-I) against the real guest (Table 6.2)"
+  hdr "Adversarial soundness suite - 19 cases, 2 controls + 17 attacks across 11 classes (A-K), against the real guest (Table 6.2)"
   if [ -f "$REPO/tests/adversarial/run_suite.sh" ]; then
     bash "$REPO/tests/adversarial/run_suite.sh"
   else
@@ -304,9 +304,9 @@ cmd_expected(){
   hdr "Expected results (this machine, v12 guest, 2026-09; CPU, 16 GB)"
   cat <<EOF
   image_id            : ${EXP_IMAGE_ID}
-  Proving (Table 6.3) : 1-field 133 s · 2-field 141 s   (n=10 pinned means; ~125/131 s per shipped proof)
-                        PDF 214 s · cross-page 611 s     (n=3 means; ~207/585 s per shipped proof)
-                        seals: 525 / 526 / 788 KB / 2.29 MB ; peak ~6.9 GB
+  Proving (Table 6.3) : 1-field 133 s · 2-field 141 s   (n=10 pinned means; the shipped proofs record 160/167 s, loaded machine)
+                        PDF 214 s · cross-page 611 s     (n=3 means; the shipped proofs record 243/1018 s, loaded machine)
+                        seals: 525 / 526 / 788 KB / 2.29 MB ; peak resident ~4.6 GB, VmPeak ~6.9 GB
                         1-/2-field/PDF at tier 2^20/2^20/2^21; cross-page 4,456,448 cycles, past 2^22
                         (all four shipped proofs regenerated at PO2=19 under this guest on 2026-09-05;
                          the old PO2=18 multipage caveat no longer applies)
@@ -315,7 +315,7 @@ cmd_expected(){
                         SHA syscall vs sha2 delta <1K cyc · added field ~106K · regex 8.4M
                         salted body commitment: +10,767 cyc (1.60%) on the 4.3 KB body,
                         but +6.25% on the 104 KB cross-page body - it hashes the WHOLE body
-  Soundness (Tab. 6.2): 13 cases across the 9 attack classes (A-I); forgeries/tampering abort, B/C bind first match, D aborts on predicate
+  Soundness (Tab. 6.2): 19 cases, 2 controls + 17 attacks across 11 classes (A-K); forgeries/tampering abort, B/C bind first match, D aborts on predicate
   Cycle counts        : 1-/2-field padded 1,048,576 (2^20) ; raw user ~685,658 (1-field, salted)
 EOF
 }

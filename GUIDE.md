@@ -113,13 +113,13 @@ Everything below is **measured** on a 16 GB CPU machine (no GPU); reproduce with
 
 | Config | Time | Seal | Cycles |
 |--------|------|------|--------|
-| 1-field `/account` | 133 s (≈125 s idle) | 525 KB | 1,048,576 (2²⁰) |
-| 2-field same page | 141 s (≈131 s idle) | 526 KB | 1,048,576 (2²⁰) |
-| PDF (NIF, FlateDecode) | 214 s (≈207 s idle) | 788 KB | 1,572,864 (2²¹) |
-| cross-page (104 KB page) | 611 s (≈585 s idle) | 2.29 MB | 4,456,448 (past 2²²) |
+| 1-field `/account` | 133 s (shipped proof 160 s) | 525 KB | 1,048,576 (2²⁰) |
+| 2-field same page | 141 s (shipped proof 167 s) | 526 KB | 1,048,576 (2²⁰) |
+| PDF (NIF, FlateDecode) | 214 s (shipped proof 243 s) | 788 KB | 1,572,864 (2²¹) |
+| cross-page (104 KB page) | 611 s (shipped proof 1018 s) | 2.29 MB | 4,456,448 (past 2²²) |
 
-The bracketed figure is the single shipped proof's own `proof_time_seconds`; the headline is the
-CPU-pinned campaign mean. Peak RAM ≈ 6.9 GB (`GPS_SEGMENT_PO2=19`; the default 2²⁰ cap yields a
+The bracketed figure is the single shipped proof's own `proof_time_seconds`, regenerated on a loaded
+machine; the headline is the CPU-pinned campaign mean. Peak resident ≈ 4.6 GB, VmPeak ≈ 6.9 GB (`GPS_SEGMENT_PO2=19`; the default 2²⁰ cap yields a
 smaller ~276 KB single-segment seal).
 
 > The cross-page row moved with the v12 guest. Under v11 it was 583 s / 2.05 MB / 4,194,304 cycles.
@@ -144,7 +144,7 @@ smaller ~276 KB single-segment seal).
 | In-circuit regex, per field (the cost the anchored form avoids) | 8.4 M |
 | One-field execution, total | ~675 K raw user cycles |
 
-**Soundness (dissertation Table 6.2):** a 13-case adversarial suite (9 attack classes A–I) runs the real guest; forgeries and tampering
+**Soundness (dissertation Table 6.2):** a 19-case adversarial suite (2 controls + 17 attacks, 11 classes A–K) runs the real guest; forgeries and tampering
 abort, the produced proofs bind the first pattern match, Case D aborts on the predicate.
 
 ## 7. Running, testing, validating
@@ -156,7 +156,7 @@ Everything is driven by **`./reproduce.sh <command>`** (run `./reproduce.sh` wit
 | `env` | Check prerequisites and print tool versions. | secs |
 | `build` | Build the zkVM (guest built reproducibly in Docker, see §10); print the guest `image_id` and assert it equals `50e385ca…` (proves the source in this tree reproduces the shipped artifacts and the dissertation, Appendix A). | ~3 min |
 | `verify` | Verify the four shipped proofs with `gps-host verify` + `risc0-verifier`, timed (Table 6.7). | secs |
-| `soundness` | Run the 13-case adversarial suite (9 attack classes A–I) against the real guest (Table 6.2). | ~3 min |
+| `soundness` | Run the 19-case adversarial suite (11 attack classes A–K) against the real guest (Table 6.2). | ~3 min |
 | `cycles` | Reproduce Table 6.4 by user-cycle differencing. Temporarily instruments host+guest, builds variants, measures, and **restores the source** (exit trap). | ~10 min |
 | `proofs` | Regenerate all four **real** proofs and print each one's time / seal / cycles (Table 6.3). | ~15–20 min |
 | `timing` | Full CPU-pinned n=10 / n=3 campaign (Table 6.3). | ~1–2 h |
@@ -323,7 +323,7 @@ generate_keys.sh        ← regenerate the leaf signing key
 docker-compose.yml      ← gps-server service
 proofs/                 ← proof_1field/2field/pdf_nif/multipage.json (real, 50e385ca)
 benchmarks/             ← run_measurements.sh (n=10 campaign) + measurement notes
-tests/adversarial/      ← run_suite.sh (13-case soundness) + RESULTS.md
+tests/adversarial/      ← run_suite.sh (19-case soundness) + RESULTS.md
 bin/                    ← prebuilt gps-host (+ attack-sim build used by the suite)
 zkvm/                   ← gps-core, methods/guest (security core), host, risc0-verifier
 gps-server/             ← OpenResty RFC 9421 signer (HTML + PDF) + mock pages

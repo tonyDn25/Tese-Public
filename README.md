@@ -75,7 +75,7 @@ sessions/             sample signed-response sessions captured by the extension
 gps-server/           OpenResty (Nginx + Lua) RFC 9421 signer (HTML + PDF) + mock pages
 nginx/keys/           leaf + SPAR root keypairs + gps-keys.json registry
 extension/            Firefox MV3 extension + native-host install.sh + manifest
-tests/adversarial/    13-case soundness suite (run_suite.sh) + RESULTS.md
+tests/adversarial/    19-case soundness suite (run_suite.sh) + RESULTS.md
 benchmarks/           n=10 timing campaign + measurement notes
 ```
 
